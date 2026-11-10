@@ -70,6 +70,12 @@
       "track": "Track",
       "heal": "Treat Wounds",
       "repair": "Repair"
-    }
+    },
+    "GMResults": "Results (GM)",
+    "Result": "Result",
+    "SecretResult": "Secret check",
+    "FailedCheck": "Check failed",
+    "SeeChat": "See PF2e chat card",
+    "NoRoll": "No roll"
   }
 }

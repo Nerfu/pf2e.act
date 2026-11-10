@@ -92,6 +92,7 @@ class BaseWindow extends ApplicationV2 {
 }
 
 export class ActivityWindow extends BaseWindow {
+  static DEFAULT_OPTIONS = { position: { width: 920 } };
   static current = null;
   editing = null;
   get title() { return t("Title"); }
@@ -105,27 +106,36 @@ export class ActivityWindow extends BaseWindow {
   contentHTML() {
     if(session().phase !== "open") return `<p>${esc(t("Unavailable"))}</p>`;
     const own = ownedActor();
-    const rows = ACTIVITIES.map(activity => {
-      const chosen = members().filter(a=>choiceFor(a)?.activityId === activity.id);
-      const selected = own && choiceFor(own)?.activityId === activity.id;
-      const names = chosen.map(actor=> {
+    // Keep frequently used exploration choices together in the left column.
+    // The remaining choices occupy an equally wide right column, with "Other"
+    // in the final full-width row (13 activities => six on each side + one).
+    const frequent = new Set(["search", "avoid", "scout", "investigate", "defend", "detect"]);
+    const common = ACTIVITIES.filter(activity => frequent.has(activity.id));
+    const additional = ACTIVITIES.filter(activity => !frequent.has(activity.id) && activity.id !== "other");
+    const other = ACTIVITY_BY_ID.get("other");
+    const activityHTML = activity => {
+      const chosen = members().filter(a => choiceFor(a)?.activityId === activity.id);
+      const selected = !!own && choiceFor(own)?.activityId === activity.id;
+      const names = chosen.map(actor => {
         const ch = choiceFor(actor);
-        const detail = detailText(ch,actor);
-        return `<div class="pf2e-ea-choice">
-          <img src="${esc(actor.img || "icons/svg/mystery-man.svg")}" alt="" />
-          <span class="pf2e-ea-character" style="color:${esc(actorColor(actor))}">${esc(actor.name)}</span>
-          ${detail?`<span class="pf2e-ea-detail"> — ${esc(detail)}</span>`:""}
-        </div>`;
+        const detail = detailText(ch, actor);
+        return `<span class="pf2e-ea-choice">
+          <span class="pf2e-ea-character" style="color:${esc(actorColor(actor))}">${esc(actor.name)}</span>${detail ? `<span class="pf2e-ea-detail"> — ${esc(detail)}</span>` : ""}
+        </span>`;
       }).join("");
-      return `<section class="pf2e-ea-activity ${selected?"pf2e-ea-selected":""}">
-        <button type="button" class="pf2e-ea-activity-button" data-pick="${esc(activity.id)}" ${own?"":"disabled"}>
-          ${icon(activity.icon)}<span>${esc(t(`Activity.${activity.id}`))}</span>
-          ${selected?icon("circle-check"):icon("plus")}
+      return `<section class="pf2e-ea-activity ${selected ? "pf2e-ea-selected" : ""}">
+        <button type="button" class="pf2e-ea-activity-button" data-pick="${esc(activity.id)}" ${own ? "" : "disabled"}>
+          <span class="pf2e-ea-button-header">${icon(activity.icon)}<span class="pf2e-ea-button-title">${esc(t(`Activity.${activity.id}`))}</span>
+          ${selected ? icon("circle-check") : icon("plus")}</span>
+          <span class="pf2e-ea-players">${names}</span>
         </button>
-        ${names?`<div class="pf2e-ea-players">${names}</div>`:""}
-        ${this.editing?.activityId===activity.id && own ? this.editorHTML(own,activity.id,choiceFor(own)) : ""}
+        ${this.editing?.activityId === activity.id && own ? this.editorHTML(own, activity.id, choiceFor(own)) : ""}
       </section>`;
-    }).join("");
+    };
+    const rows = `<div class="pf2e-ea-columns">
+      <div class="pf2e-ea-column">${common.map(activityHTML).join("")}</div>
+      <div class="pf2e-ea-column">${additional.map(activityHTML).join("")}</div>
+    </div>${other ? `<div class="pf2e-ea-other">${activityHTML(other)}</div>` : ""}`;
     const footer = `<footer class="pf2e-ea-footer">
       <div class="pf2e-ea-footer-left">${own?`<label class="pf2e-ea-remember"><input type="checkbox" data-remember="${esc(own.id)}" ${remember(own)?"checked":""} />${esc(t("Remember"))}</label>`:""}</div>
       <div class="pf2e-ea-footer-center">${game.user.isGM?`<button type="button" data-master="1">${esc(t("ChooseForPlayers"))}</button>`:""}</div>

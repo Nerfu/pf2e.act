@@ -1,5 +1,5 @@
 import { ID, ACTIVITY_BY_ID, HEAL_RANKS, esc, validateChoice } from "./config.mjs";
-import { t, session, party, members, choiceFor, remember, userFor, choiceText, fail, itemsFor } from "./state.mjs";
+import { t, session, party, members, choiceFor, remember, userFor, actorColor, choiceText, fail, itemsFor } from "./state.mjs";
 
 let resolving = false;
 const apiAction = slug => game.pf2e?.actions?.get?.(slug);
@@ -8,14 +8,22 @@ const actorStat = (actor, slug) => actor.getStatistic?.(slug) ?? actor.skills?.[
 async function check(actor, statSlug, { secret = false, action = "", options = [], traits = [] } = {}) {
   const statistic = actorStat(actor, statSlug);
   if (!statistic?.check?.roll) throw new Error(`${actor.name}: ${t("MissingStatistic")} (${statSlug})`);
-  await statistic.check.roll({
+  let outcome = null;
+  const roll = await statistic.check.roll({
     action: action || undefined,
     extraRollOptions: options,
     traits,
     skipDialog: true,
     messageMode: secret ? "blind" : "public",
     createMessage: true,
+    callback: (_roll, degree) => { outcome = degree ?? null; },
   });
+  return { total: Number.isFinite(roll?.total) ? roll.total : null, outcome };
+}
+
+function actionRoll(results) {
+  const entry = Array.isArray(results) ? results[0] : null;
+  return { total: Number.isFinite(entry?.roll?.total) ? entry.roll.total : null, outcome: entry?.outcome ?? null };
 }
 
 async function execute(actor, choice) {
@@ -31,7 +39,7 @@ async function execute(actor, choice) {
     case "track": {
       const track = apiAction("track");
       if (!track?.use) throw new Error(t("MissingAction")+" (Track)");
-      return track.use({actors:[actor]});
+      return actionRoll(await track.use({actors:[actor]}));
     }
     case "heal": {
       const action = apiAction("treat-wounds");
@@ -45,25 +53,52 @@ async function execute(actor, choice) {
       if (!target) throw new Error(t("MissingTarget"));
       // Use PF2e's own action: it creates both the check and a native healing/damage card.
       // The card's standard application button targets tokens selected at application time.
-      return action.use({actors:[actor],target,selection:{skill:"medicine",rank:choice.rank,modifier:0,feats}});
+      return actionRoll(await action.use({actors:[actor],target,selection:{skill:"medicine",rank:choice.rank,modifier:0,feats}}));
     }
     case "repair": {
       const item = await fromUuid(choice.itemUuid);
       if (!item?.isOfType?.("physical")) throw new Error(t("MissingItem"));
       // The PF2e legacy action intentionally renders a native Repair result card.
       if (typeof game.pf2e?.actions?.repair !== "function") throw new Error(t("MissingAction")+" (Repair)");
-      return game.pf2e.actions.repair({actors:[actor],item});
+      // Repair's legacy macro returns before its asynchronous native chat card is posted.
+      // Never invent a result: link the user to that native PF2e card instead.
+      await game.pf2e.actions.repair({actors:[actor],item});
+      return { external: true };
     }
     default: return;
   }
 }
 
-function resultsSummary(s, snapshots) {
-  const rows = snapshots.map(({actor,choice}) => `
-    <tr><td>${esc(actor.name)}</td><td>${esc(choiceText(choice,actor))}</td></tr>`).join("");
-  return `<div class="pf2e-ea-chat-summary"><h3>${esc(t("ChatResults"))}</h3>
-    <table><thead><tr><th>${esc(t("Character"))}</th><th>${esc(t("ActivityHeader"))}</th></tr></thead>
-    <tbody>${rows || `<tr><td colspan="2">${esc(t("NoChoice"))}</td></tr>`}</tbody></table></div>`;
+function tokenPortrait(actor) {
+  // Prototype token artwork, not the portrait on the actor sheet.
+  return actor.prototypeToken?.texture?.src || actor.img || "icons/svg/mystery-man.svg";
+}
+
+function resultHTML(choice, result, gm) {
+  if (ACTIVITY_BY_ID.get(choice.activityId)?.secret && !gm) return esc(t("SecretResult"));
+  if (result?.error) return esc(t("FailedCheck"));
+  if (result?.external) return esc(t("SeeChat"));
+  if (Number.isFinite(result?.total)) {
+    const outcome = ["criticalSuccess", "success", "failure", "criticalFailure"].includes(result?.outcome)
+      ? game.i18n.localize(`PF2E.Check.Result.Degree.Check.${result.outcome}`) : "";
+    const localized = outcome?.startsWith("PF2E.") ? "" : outcome;
+    return `<strong>${esc(result.total)}</strong>${localized ? ` <small>(${esc(localized)})</small>` : ""}`;
+  }
+  return result?.noRoll ? esc(t("NoRoll")) : esc(t("SeeChat"));
+}
+
+function resultsSummary(snapshots, outcomes, { gm = false } = {}) {
+  const rows = snapshots.map(({ actor, choice }) => {
+    const character = `<span class="pf2e-ea-report-actor"><img src="${esc(tokenPortrait(actor))}" alt="" />`+
+      `<strong style="color:${esc(actorColor(actor))}">${esc(actor.name)}</strong></span>`;
+    const activity = esc(choiceText(choice, actor));
+    return `<tr><td>${character}</td><td>${activity}</td>`+
+      `<td class="pf2e-ea-result">${resultHTML(choice, outcomes.get(actor.id), gm)}</td></tr>`;
+  }).join("");
+  const title = gm ? t("GMResults") : t("ChatResults");
+  return `<div class="pf2e-ea-chat-summary"><h3>${esc(title)}</h3>`+
+    `<table><thead><tr><th>${esc(t("Character"))}</th><th>${esc(t("ActivityHeader"))}</th><th>${esc(t("Result"))}</th></tr></thead>`+
+    `<tbody>${rows || `<tr><td colspan="3">${esc(t("NoChoice"))}</td></tr>`}</tbody></table></div>`;
 }
 
 export async function launch() {
@@ -109,18 +144,35 @@ export async function finish() {
         catch(e) { console.warn(ID,"Could not save remembered choice",actor.name,e); }
       }
     }
-    await ChatMessage.create({speaker:{alias:t("Title")},content:resultsSummary(s,snapshots)});
     const failures=[];
+    const outcomes = new Map();
     for (const {actor,choice} of snapshots) {
-      try { await execute(actor,choice); }
-      catch(error) {
+      try {
+        const result = await execute(actor,choice);
+        outcomes.set(actor.id, result ?? { noRoll: true });
+      } catch(error) {
         console.error(ID,"Action failed",actor.name,choice.activityId,error);
+        outcomes.set(actor.id, { error: true });
         failures.push(`${actor.name}: ${error?.message ?? String(error)}`);
       }
     }
+    // Public report contains activity names and public outcomes only. Blind roll
+    // totals are never included, even in hidden attributes or data-* fields.
+    await ChatMessage.create({speaker:{alias:t("Title")},content:resultsSummary(snapshots,outcomes)});
+    const gmRecipients = [...new Set([
+      game.user.id,
+      ...ChatMessage.getWhisperRecipients("GM").map(u => u.id),
+    ])];
+    if (snapshots.some(({choice}) => ACTIVITY_BY_ID.get(choice.activityId)?.secret)) {
+      await ChatMessage.create({
+        speaker:{alias:t("Title")},
+        whisper:gmRecipients,
+        content:resultsSummary(snapshots,outcomes,{gm:true}),
+      });
+    }
     if(failures.length) {
       await ChatMessage.create({
-        whisper:ChatMessage.getWhisperRecipients("GM").map(u=>u.id),
+        whisper:gmRecipients,
         content:`<p><strong>${esc(t("RollErrors"))}</strong></p><ul>${failures.map(f=>`<li>${esc(f)}</li>`).join("")}</ul>`,
       });
       ui.notifications.warn(t("SomeRollsFailed"));
