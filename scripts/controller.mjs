@@ -1,26 +1,26 @@
 import { ID, ACTIVITY_BY_ID, esc, validateChoice } from "./config.mjs";
-import { performTreatment } from "./healing.mjs";
-import { rollCheck } from "./rolls.mjs";
+import { prepareTreatment } from "./healing.mjs";
+import { rollCheck, playRollWave } from "./rolls.mjs";
 import { t, session, party, members, choiceFor, orderedSelections, remember, userFor, actorColor, choiceText, fail } from "./state.mjs";
 
 let resolving = false;
-async function execute(actor, choice) {
+async function execute(actor, choice, queue) {
   switch (choice.activityId) {
     case "search":
-      return rollCheck(actor,"perception",{secret:true,action:"seek",options:["action:seek"],traits:["concentrate","secret"]});
+      return rollCheck(actor,"perception",{secret:true,action:"seek",options:["action:seek"],traits:["concentrate","secret"],queue});
     case "avoid":
-      return rollCheck(actor,"stealth",{secret:true,action:"avoid-notice",options:["action:avoid-notice"],traits:["exploration","secret"]});
+      return rollCheck(actor,"stealth",{secret:true,action:"avoid-notice",options:["action:avoid-notice"],traits:["exploration","secret"],queue});
     case "investigate":
-      return rollCheck(actor,choice.skill,{secret:true,action:"recall-knowledge",options:["action:recall-knowledge",`action:recall-knowledge:${choice.skill}`],traits:["concentrate","secret"]});
+      return rollCheck(actor,choice.skill,{secret:true,action:"recall-knowledge",options:["action:recall-knowledge",`action:recall-knowledge:${choice.skill}`],traits:["concentrate","secret"],queue});
     case "skill":
-      return rollCheck(actor,choice.skill,{secret:false});
+      return rollCheck(actor,choice.skill,{secret:false,queue});
     case "track": {
-      return rollCheck(actor,"survival",{secret:false,action:"track",options:["action:track"],traits:["concentrate","exploration","move"]});
+      return rollCheck(actor,"survival",{secret:false,action:"track",options:["action:track"],traits:["concentrate","exploration","move"],queue});
     }
     case "heal": {
       const target = game.actors.get(choice.targetId);
       if (!target) throw new Error(t("MissingTarget"));
-      return performTreatment(actor, target, choice);
+      return prepareTreatment(actor, target, choice, { queue });
     }
     default: return;
   }
@@ -33,9 +33,12 @@ function tokenPortrait(actor) {
 
 /** Display a formula only to viewers allowed to see the check. */
 function breakdownHTML(result) {
-  const dice = (result.dice ?? []).flatMap(term => term.results.map(die =>
-    `<span class="pf2e-ea-die ${die.kept ? "" : "pf2e-ea-die-dropped"}">d${esc(term.faces)}: ${esc(die.value)}</span>`
-  )).join("");
+  const dice = (result.dice ?? []).flatMap((term, index) => term.results.map(die => {
+    const natural = index === 0 && term.faces === 20 && die.kept && die.value === result.natural
+      ? `pf2e-ea-natural-${result.natural}` : "";
+    return `<span class="pf2e-ea-die ${die.kept ? "" : "pf2e-ea-die-dropped"} ${natural}">`+
+      `d${esc(term.faces)}: ${esc(die.value)}</span>`;
+  })).join("");
   const modifiers = (result.modifiers ?? []).map(mod =>
     `<span class="pf2e-ea-modifier">${esc(mod.label)} ${mod.value >= 0 ? "+" : ""}${esc(mod.value)}</span>`
   ).join("");
@@ -63,7 +66,8 @@ function resultHTML(choice, result, gm) {
       `<div class="pf2e-ea-applied-breakdown"><strong>${esc(t(applied.damaging ? "Damage" : "Healing"))}</strong>`+
       breakdownHTML(applied) + `</div>`
     ).join("");
-    return { value: `<span class="pf2e-ea-report-total">${esc(result.total)}</span>`+
+    const natural = [1, 20].includes(result.natural) ? ` pf2e-ea-natural-${result.natural}` : "";
+    return { value: `<span class="pf2e-ea-report-total${natural}">${esc(result.total)}</span>`+
       (degree ? `<span class="pf2e-ea-report-degree">${esc(degree)}</span>` : "") + summary,
       details };
   }
@@ -142,12 +146,34 @@ export async function finish() {
     }
     const failures=[];
     const outcomes = new Map();
+    const animations = [];
+    const treatments = [];
+    // Preserve selection order for all PF2e checks. Do not change any HP yet.
     for (const {actor,choice} of snapshots) {
       try {
-        const result = await execute(actor,choice);
-        outcomes.set(actor.id, result ?? { noRoll: true });
+        const result = await execute(actor,choice,animations);
+        if (choice.activityId === "heal") {
+          treatments.push({ actor, choice, prepared: result });
+          outcomes.set(actor.id, result.result);
+        } else {
+          outcomes.set(actor.id, result ?? { noRoll: true });
+        }
       } catch(error) {
         console.error(ID,"Action failed",actor.name,choice.activityId,error);
+        outcomes.set(actor.id, { error: true });
+        failures.push(`${actor.name}: ${error?.message ?? String(error)}`);
+      }
+    }
+    // Start all actors' Dice So Nice rolls together, retaining each player's
+    // appearance and per-roll visibility. Wait for every animation to finish.
+    await playRollWave(animations);
+    // Now apply the already-evaluated treatment dice in original selection
+    // order. Within each treatment, Risky Surgery damage precedes healing.
+    for (const {actor,choice,prepared} of treatments) {
+      try {
+        outcomes.set(actor.id, await prepared.apply());
+      } catch(error) {
+        console.error(ID,"Treatment application failed",actor.name,choice.activityId,error);
         outcomes.set(actor.id, { error: true });
         failures.push(`${actor.name}: ${error?.message ?? String(error)}`);
       }

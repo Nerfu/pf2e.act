@@ -80,3 +80,14 @@
 .pf2e-ea-chat-summary .pf2e-ea-die-dropped { text-decoration:line-through; opacity:0.55; }
 .pf2e-ea-chat-summary .pf2e-ea-applied-breakdown { margin-top:0.3rem; padding-left:0.25rem; font-size:0.77rem; }
 .pf2e-ea-chat-summary .pf2e-ea-applied-breakdown > .pf2e-ea-roll-breakdown { margin-top:0.15rem; }
+
+/* PF2e-style natural d20 highlights in the final report only (not 3D dice).
+   Do not use the outcome: a natural 20 can still fail a difficult DC. */
+.pf2e-ea-chat-summary .pf2e-ea-natural-20 {
+  color: var(--color-pf-text-critical-success, #278346);
+  font-weight: 750;
+}
+.pf2e-ea-chat-summary .pf2e-ea-natural-1 {
+  color: var(--color-pf-text-critical-failure, #c54343);
+  font-weight: 750;
+}

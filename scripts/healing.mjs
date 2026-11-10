@@ -28,10 +28,11 @@ function damageRollClass() {
   return cls;
 }
 
-async function rollTreatmentDice(formula) {
+async function rollTreatmentDice(formula, actor, queue) {
   const DamageRoll = damageRollClass();
   const roll = await new DamageRoll(formula).roll();
-  await animateRoll(roll);
+  if (queue) queue.push({ roll, actor, secret: false });
+  else await animateRoll(roll, { actor });
   return roll;
 }
 
@@ -48,7 +49,9 @@ async function applyTreatmentRoll(target, token, roll, { damaging, outcome }) {
   return { ...describeRoll(roll), amount, damaging };
 }
 
-export async function performTreatment(actor, target, choice) {
+/** Prepare every native PF2e roll without modifying HP. The returned apply() is
+ * invoked only after the entire group's 3D animation wave has finished. */
+export async function prepareTreatment(actor, target, choice, { queue = null } = {}) {
   const skill = actor.getStatistic?.("medicine") ?? actor.skills?.medicine;
   if (!skill?.check?.roll || Number(actor.skills?.medicine?.rank ?? 0) < 1) {
     throw new Error(`${actor.name}: ${t("MedicineTrainingRequired")}`);
@@ -83,6 +86,7 @@ export async function performTreatment(actor, target, choice) {
       action: "treat-wounds", options,
       traits: ["exploration", "healing", "manipulate"],
       dc: { value: dc, visible: true },
+      queue,
     });
   } finally {
     if (rule) rule.value = oldValue;
@@ -93,7 +97,9 @@ export async function performTreatment(actor, target, choice) {
   }
 
   const result = check;
-  if (!OUTCOMES_WITH_HEAL_ROLL.has(result.outcome) && !risky) return result;
+  if (!OUTCOMES_WITH_HEAL_ROLL.has(result.outcome) && !risky) {
+    return { result, async apply() { return result; } };
+  }
 
   // The same PF2e formulas as Treat Wounds' native callback, but without messages.
   const bonus = HEALING_BONUS[usedRank] +
@@ -105,20 +111,36 @@ export async function performTreatment(actor, target, choice) {
       ? `{(${result.outcome === "criticalSuccess" ? 4 : 2}${healDice}${bonus > 0 ? ` + ${bonus}` : ""})[healing]}`
       : null;
 
-  // Evaluate all required dice first. Once application begins, never re-roll them.
-  const riskyRoll = risky ? await rollTreatmentDice("{1d8[slashing]}") : null;
-  const healingRoll = healFormula ? await rollTreatmentDice(healFormula) : null;
-  const token = await target.getTokenDocument({ actorLink: true });
-  if (!token) throw new Error(t("MissingHealingToken"));
-  if (riskyRoll) result.risky = await applyTreatmentRoll(target, token, riskyRoll, {
-    damaging: true, outcome: result.outcome,
-  });
-  if (healingRoll) {
-    const damaging = result.outcome === "criticalFailure";
-    result.applied = await applyTreatmentRoll(target, token, healingRoll, { damaging, outcome: result.outcome });
-    if (!damaging && target.hasCondition?.("wounded")) {
-      await target.toggleCondition("wounded", { active: false });
-    }
-  }
-  return result;
+  // Evaluate every die now; effects on HP must wait for all 3D animations.
+  const riskyRoll = risky ? await rollTreatmentDice("{1d8[slashing]}", actor, queue) : null;
+  const healingRoll = healFormula ? await rollTreatmentDice(healFormula, actor, queue) : null;
+  let applied = false;
+  return {
+    result,
+    async apply() {
+      if (applied) throw new Error(t("AlreadyApplied"));
+      applied = true;
+      const token = await target.getTokenDocument({ actorLink: true });
+      if (!token) throw new Error(t("MissingHealingToken"));
+      if (riskyRoll) result.risky = await applyTreatmentRoll(target, token, riskyRoll, {
+        damaging: true, outcome: result.outcome,
+      });
+      if (healingRoll) {
+        const damaging = result.outcome === "criticalFailure";
+        result.applied = await applyTreatmentRoll(target, token, healingRoll, {
+          damaging, outcome: result.outcome,
+        });
+        if (!damaging && target.hasCondition?.("wounded")) {
+          await target.toggleCondition("wounded", { active: false });
+        }
+      }
+      return result;
+    },
+  };
+}
+
+/** Standalone compatibility wrapper; the batch controller uses prepareTreatment. */
+export async function performTreatment(actor, target, choice) {
+  const treatment = await prepareTreatment(actor, target, choice);
+  return treatment.apply();
 }
