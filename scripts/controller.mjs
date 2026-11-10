@@ -63,7 +63,7 @@ function resultsSummary(s, snapshots) {
     <tr><td>${esc(actor.name)}</td><td>${esc(choiceText(choice,actor))}</td></tr>`).join("");
   return `<div class="pf2e-ea-chat-summary"><h3>${esc(t("ChatResults"))}</h3>
     <table><thead><tr><th>${esc(t("Character"))}</th><th>${esc(t("ActivityHeader"))}</th></tr></thead>
-    <tbody>${rows}</tbody></table></div>`;
+    <tbody>${rows || `<tr><td colspan="2">${esc(t("NoChoice"))}</td></tr>`}</tbody></table></div>`;
 }
 
 export async function launch() {
@@ -71,7 +71,6 @@ export async function launch() {
   const p = party();
   if (!p) return ui.notifications.warn(t("NoParty"));
   const participants = p.members.filter(a => !!a?.id);
-  if (!participants.length) return ui.notifications.warn(t("EmptyParty"));
   const s = session();
   if (s.phase === "resolving") return ui.notifications.warn(t("Resolving"));
   if (s.phase !== "open") {
@@ -95,9 +94,9 @@ export async function finish() {
   if (!game.user.isGM || resolving) return;
   const s = session();
   if (s.phase !== "open") return ui.notifications.warn(t("Unavailable"));
-  const snapshots = members(s).map(actor=>({actor,choice:choiceFor(actor,s)}));
-  const absent = snapshots.filter(x=>!x.choice);
-  if (absent.length) return ui.notifications.warn(`${t("MissingSelections")}: ${absent.map(x=>x.actor.name).join(", ")}`);
+  // Characters without an activity are allowed: only chosen activities roll.
+  // The GM may finish even when nobody has selected anything.
+  const snapshots = members(s).map(actor=>({actor,choice:choiceFor(actor,s)})).filter(x=>!!x.choice);
   const invalid = snapshots.filter(({actor,choice})=>!validateChoice(choice,actor,s.actorIds));
   if (invalid.length) return ui.notifications.warn(`${t("InvalidSelections")}: ${invalid.map(x=>x.actor.name).join(", ")}`);
   resolving = true;
