@@ -1,0 +1,39 @@
+.pf2e-ea-window .window-content { padding: 0; }
+.pf2e-ea-root { display: flex; flex-direction: column; gap: 0.7rem; padding: 0.8rem; min-width: 270px; }
+.pf2e-ea-heading { display:flex; justify-content:space-between; align-items:center; gap:0.6rem; padding:0.25rem 0.1rem; }
+.pf2e-ea-heading strong { font-size:1.05rem; }
+.pf2e-ea-heading span { opacity:0.7; font-size:0.85rem; }
+.pf2e-ea-activities { display:flex; flex-direction:column; gap:0.35rem; max-height: min(65vh, 680px); overflow:auto; padding-right: 0.15rem; }
+.pf2e-ea-activity { border:1px solid var(--color-border-light-primary,#7776); border-radius:7px; overflow:hidden; }
+.pf2e-ea-activity.pf2e-ea-selected { border-color:var(--color-border-highlight,#a99c73); }
+.pf2e-ea-activity-button { background:transparent; box-shadow:none; border:0; display:flex; align-items:center; gap:0.6rem; width:100%; text-align:left; padding:0.6rem 0.7rem; min-height: 38px; }
+.pf2e-ea-activity-button span { flex:1; }
+.pf2e-ea-activity-button .fa-solid { width:18px; text-align:center; }
+.pf2e-ea-activity-button:disabled { opacity:0.85; cursor:default; }
+.pf2e-ea-activity-button .fa-circle-check { color:#328553; }
+.pf2e-ea-players { display:flex; flex-direction:column; gap:0.2rem; border-top:1px solid var(--color-border-light-primary,#7775); padding:0.45rem 0.8rem; }
+.pf2e-ea-choice { display:flex; flex-wrap:wrap; align-items:center; gap:0.3rem; font-size:0.9rem; }
+.pf2e-ea-choice img, .pf2e-ea-master-list img { width:25px; height:25px; object-fit:cover; border:0; border-radius:4px; }
+.pf2e-ea-character { font-weight:700; }
+.pf2e-ea-detail { color:var(--color-text-primary,inherit); opacity:0.87; }
+.pf2e-ea-editor,.pf2e-ea-master-editor { padding:0.6rem; display:flex; flex-direction:column; gap:0.65rem; border-top:1px solid var(--color-border-light-primary,#7775); }
+.pf2e-ea-editor label,.pf2e-ea-master-editor label { display:flex; flex-direction:column; gap:0.25rem; font-size:0.86rem; }
+.pf2e-ea-editor input,.pf2e-ea-editor select,.pf2e-ea-master-editor input,.pf2e-ea-master-editor select { width:100%; min-height:30px; }
+.pf2e-ea-editor-actions { display:flex; justify-content:flex-end; gap:0.5rem; }
+.pf2e-ea-footer { border-top:1px solid var(--color-border-light-primary,#7778); padding-top:0.65rem; display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); gap:0.55rem; align-items:center; }
+.pf2e-ea-footer-left { justify-self:start; }
+.pf2e-ea-footer-center { justify-self:center; }
+.pf2e-ea-footer-right { justify-self:end; }
+.pf2e-ea-remember { display:inline-flex !important; flex-direction:row !important; align-items:center; gap:0.35rem !important; white-space:nowrap; font-size:0.88rem; cursor:pointer; }
+.pf2e-ea-remember input { width:auto !important; min-height:unset !important; margin:0; }
+.pf2e-ea-primary { background:var(--color-cool-4,#48596e); color:white; padding:0.3rem 0.9rem; }
+.pf2e-ea-master-list { display:flex; flex-direction:column; gap:0.3rem; max-height:60vh; overflow:auto; }
+.pf2e-ea-master-list button { display:flex; gap:0.7rem; align-items:center; padding:0.5rem; text-align:left; }
+.pf2e-ea-master-list button span { display:flex; flex:1; flex-direction:column; }
+.pf2e-ea-master-list button small { opacity:0.75; margin-top:0.2rem; }
+.pf2e-ea-master-list img { width:36px; height:36px; }
+.pf2e-ea-warning { color:var(--color-level-error,#a44); }
+.pf2e-ea-hint { font-size:0.82rem; opacity:0.78; line-height:1.4; margin:0.1rem 0; }
+.pf2e-ea-launch-panel { display:flex; flex-direction:column; gap:0.7rem; }
+.pf2e-ea-chat-open { margin-top:0.5rem; width:100%; }
+@media(max-width:480px){.pf2e-ea-footer { grid-template-columns:1fr auto; }.pf2e-ea-footer-center { grid-column:1; justify-self:start; }.pf2e-ea-footer-right { grid-column:2; }}

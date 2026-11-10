@@ -1,0 +1,7 @@
+{
+  "name": "Активности PF2e — начать выбор",
+  "type": "script",
+  "command": "await game.modules.get('pf2e-exploration-activities').api.launch();",
+  "img": "icons/svg/compass.svg",
+  "scope": "global"
+}
