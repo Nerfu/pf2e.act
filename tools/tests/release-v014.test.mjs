@@ -57,27 +57,48 @@ function makeActor(id,rollResult,choice){
   return actor;
 }
 
-test('private track has no result details in public HTML and can expand only for GM',()=>{
+test('track is public: visible result and expandable formula for everyone',()=>{
   const actor={id:'abc',name:'Test<script>',prototypeToken:{texture:{src:'x.png'}}};
   const data=[{actor,choice:{activityId:'track'}}];
   const result=new Map([['abc',{total:25,formula:'1d20 + 7',dice:[{faces:20,results:[{value:18,kept:true}]}],modifiers:[{label:'Survival',value:7}]}]]);
   const publicCard=resultsSummary(data,result);
   assert.ok(publicCard.includes('Test&lt;script&gt;'));
-  assert.ok(!publicCard.includes('25'));
-  assert.ok(!publicCard.includes('1d20'));
-  assert.ok(!publicCard.includes('<details'));
-  const secretCard=resultsSummary(data,result,{gm:true});
-  assert.ok(secretCard.includes('25'));
-  assert.ok(secretCard.includes('1d20 + 7'));
-  assert.ok(secretCard.includes('d20: 18'));
-  assert.ok(secretCard.includes('<details'));
+  assert.ok(publicCard.includes('25'));
+  assert.ok(publicCard.includes('1d20 + 7'));
+  assert.ok(publicCard.includes('d20: 18'));
+  assert.ok(publicCard.includes('<details'));
 });
 
-test('check runs silently, without dialogs, with GM-only DSN animation',async()=>{
+test('search remains secret: public report leaks neither result nor formula',()=>{
+  const actor={id:'secret',name:'Seeker',prototypeToken:{texture:{src:'x.png'}}};
+  const data=[{actor,choice:{activityId:'search'}}];
+  const result=new Map([['secret',{total:29,formula:'1d20 + 9',dice:[{faces:20,results:[{value:20,kept:true}]}],modifiers:[{label:'Perception',value:9}]}]]);
+  const publicCard=resultsSummary(data,result);
+  assert.ok(!publicCard.includes('29'));
+  assert.ok(!publicCard.includes('1d20'));
+  assert.ok(!publicCard.includes('<details'));
+  const gmCard=resultsSummary(data,result,{gm:true});
+  assert.ok(gmCard.includes('29'));
+  assert.ok(gmCard.includes('1d20 + 9'));
+  assert.ok(gmCard.includes('<details'));
+});
+
+test('open track check rolls silently, skips dialog, and broadcasts DSN animation',async()=>{
   const actor=makeActor('track1',{total:25},{activityId:'track'});
   actors.set('track1',actor);
-  let r=await rollCheck(actor,'survival',{secret:true,options:['action:track'],traits:['secret']});
+  const r=await rollCheck(actor,'survival',{secret:false,action:'track',options:['action:track'],traits:['concentrate','exploration','move']});
   assert.equal(r.total,25);
+  assert.equal(actor.inspect().createMessage,false);
+  assert.equal(actor.inspect().skipDialog,true);
+  assert.equal(actor.inspect().messageMode,'public');
+  assert.equal(animations.at(-1)[3],null);
+  assert.equal(chats.length,0);
+});
+
+test('hidden search check still has blind mode and GM-only animation',async()=>{
+  const actor=makeActor('search1',{total:29},{activityId:'search'});
+  actors.set('search1',actor);
+  await rollCheck(actor,'perception',{secret:true,action:'seek',options:['action:seek'],traits:['concentrate','secret']});
   assert.equal(actor.inspect().createMessage,false);
   assert.equal(actor.inspect().skipDialog,true);
   assert.equal(actor.inspect().messageMode,'blind');
@@ -116,20 +137,23 @@ test('risky surgery and a critical failure apply native damage twice and no mess
   assert.equal(chats.length,0);
 });
 
-test('finish posts only public+GM summaries; hidden checks never reach players',async()=>{
+test('finish posts only summaries: track is public while search is hidden',async()=>{
   chats.length=0;
-  setup.id='sess1';setup.phase='open';
+  setup.id='sess1';setup.phase='open';setup.actorIds=['track1','skill1','heal1','search1'];
   const track=makeActor('track1',{total:25},{activityId:'track'});
   const skill=makeActor('skill1',{total:19},{activityId:'skill',skill:'athletics'});
   const patient=makeActor('heal1',{total:22,outcome:'success'},{activityId:'heal',rank:'trained',targetId:'track1'});
-  for(const a of [track,skill,patient])actors.set(a.id,a);
-  game.actors.party.members=[track,skill,patient];
+  const search=makeActor('search1',{total:29},{activityId:'search'});
+  for(const a of [track,skill,patient,search])actors.set(a.id,a);
+  game.actors.party.members=[track,skill,patient,search];
   await finish();
   assert.equal(chats.length,2);
-  assert.ok(!chats[0].content.includes('25'));
+  assert.ok(chats[0].content.includes('25'));
   assert.ok(chats[0].content.includes('19'));
+  assert.ok(!chats[0].content.includes('29'));
   assert.ok(!chats[0].whisper);
   assert.deepEqual(chats[1].whisper,['gm']);
   assert.ok(chats[1].content.includes('25'));
+  assert.ok(chats[1].content.includes('29'));
   assert.equal(setup.phase,'closed');
 });

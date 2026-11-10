@@ -15,7 +15,7 @@ async function execute(actor, choice) {
     case "skill":
       return rollCheck(actor,choice.skill,{secret:false});
     case "track": {
-      return rollCheck(actor,"survival",{secret:true,action:"track",options:["action:track"],traits:["concentrate","exploration","move","secret"]});
+      return rollCheck(actor,"survival",{secret:false,action:"track",options:["action:track"],traits:["concentrate","exploration","move"]});
     }
     case "heal": {
       const target = game.actors.get(choice.targetId);
