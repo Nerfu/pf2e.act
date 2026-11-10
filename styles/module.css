@@ -1,25 +1,26 @@
-.pf2e-ea-window .window-content { padding: 0; }
-.pf2e-ea-root { display: flex; flex-direction: column; gap: 0.7rem; padding: 0.8rem; min-width: 270px; }
-.pf2e-ea-heading { display:flex; justify-content:space-between; align-items:center; gap:0.6rem; padding:0.25rem 0.1rem; }
-.pf2e-ea-heading strong { font-size:1.05rem; }
-.pf2e-ea-heading span { opacity:0.7; font-size:0.85rem; }
-.pf2e-ea-activities { display:flex; flex-direction:column; gap:0.65rem; max-height:min(72vh, 760px); overflow:auto; padding-right:0.15rem; }
-.pf2e-ea-columns { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.7rem; align-items:start; }
-.pf2e-ea-column { display:grid; grid-template-columns:minmax(0,1fr); gap:0.55rem; min-width:0; }
-.pf2e-ea-other { display:block; width:100%; }
-.pf2e-ea-activity { display:flex; flex-direction:column; border:1px solid var(--color-border-light-primary,#7776); border-radius:7px; min-width:0; overflow:hidden; }
-.pf2e-ea-activity.pf2e-ea-selected { border-color:var(--color-border-highlight,#a99c73); }
-.pf2e-ea-activity-button { box-shadow:none; border:0; background:transparent; display:flex; flex-direction:column; align-items:stretch; gap:0.45rem; width:100%; min-height:112px; text-align:left; padding:0.7rem 0.8rem; }
-.pf2e-ea-button-header { display:flex; align-items:center; gap:0.6rem; min-height:24px; }
-.pf2e-ea-button-header .fa-solid { width:18px; text-align:center; flex-shrink:0; }
-.pf2e-ea-button-header .pf2e-ea-button-title { flex:1; font-weight:600; }
-.pf2e-ea-activity-button:disabled { opacity:0.85; cursor:default; }
+/* Styling follows Guild Quest Tracker's compact content-sized choices. */
+.pf2e-ea-window .window-content { padding:0; }
+.pf2e-ea-root { display:flex; flex-direction:column; gap:0.55rem; padding:0.65rem; min-width:270px; container-type:inline-size; }
+.pf2e-ea-heading { display:flex; justify-content:space-between; align-items:center; gap:0.6rem; padding:0.1rem; }
+.pf2e-ea-heading strong { font-size:1.04rem; }
+.pf2e-ea-heading span { opacity:0.75; font-size:0.83rem; }
+.pf2e-ea-activities { display:flex; flex-direction:column; max-height:min(73vh,720px); overflow-y:auto; padding-right:0.14rem; }
+.pf2e-ea-columns { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.5rem; align-items:start; }
+.pf2e-ea-column { display:flex; flex-direction:column; gap:0.45rem; min-width:0; }
+.pf2e-ea-activity { display:flex; flex-direction:column; min-width:0; border:1px solid var(--color-border-light-primary,#7778); border-radius:5px; }
+.pf2e-ea-activity.pf2e-ea-selected { outline:2px solid #478bc3; outline-offset:-1px; }
+.pf2e-ea-activity-button { display:flex; flex-direction:column; align-items:stretch; gap:0.22rem; width:100%; min-height:0; height:auto; box-shadow:none; border:0; padding:0.5rem 0.65rem; text-align:left; background:transparent; color:var(--color-text-primary,#eee); white-space:normal; line-height:1.3; }
+.pf2e-ea-button-header { display:flex; align-items:center; gap:0.45rem; }
+.pf2e-ea-button-header>.fa-solid { width:16px; flex-shrink:0; text-align:center; }
+.pf2e-ea-button-header .pf2e-ea-button-title { flex:1; font-size:0.91rem; font-weight:600; }
+.pf2e-ea-activity-button:disabled { opacity:0.7; cursor:default; }
 .pf2e-ea-activity-button .fa-circle-check { color:#328553; }
-.pf2e-ea-players { display:flex; flex-wrap:wrap; align-content:flex-start; align-items:flex-start; column-gap:0.75rem; row-gap:0.2rem; min-height:2.8em; width:100%; font-size:0.88rem; line-height:1.3; }
-.pf2e-ea-choice { display:inline; overflow-wrap:anywhere; }
+.pf2e-ea-players { display:flex; flex-wrap:wrap; column-gap:0.3rem; row-gap:0.2rem; width:100%; padding-top:0.1rem; font-size:0.82rem; line-height:1.35; }
+.pf2e-ea-players:empty { display:none; }
+.pf2e-ea-choice { display:inline-block; max-width:100%; padding:0.06rem 0.35rem; border-radius:99px; background:rgba(95,130,165,0.15); overflow-wrap:break-word; }
 .pf2e-ea-master-list img { width:25px; height:25px; object-fit:cover; border:0; border-radius:4px; }
 .pf2e-ea-character { font-weight:700; }
-.pf2e-ea-detail { color:var(--color-text-primary,inherit); opacity:0.87; }
+.pf2e-ea-detail { color:var(--color-text-primary,inherit); opacity:0.9; }
 .pf2e-ea-editor,.pf2e-ea-master-editor { padding:0.6rem; display:flex; flex-direction:column; gap:0.65rem; border-top:1px solid var(--color-border-light-primary,#7775); }
 .pf2e-ea-editor label,.pf2e-ea-master-editor label { display:flex; flex-direction:column; gap:0.25rem; font-size:0.86rem; }
 .pf2e-ea-editor input,.pf2e-ea-editor select,.pf2e-ea-master-editor input,.pf2e-ea-master-editor select { width:100%; min-height:30px; }
@@ -40,12 +41,28 @@
 .pf2e-ea-hint { font-size:0.82rem; opacity:0.78; line-height:1.4; margin:0.1rem 0; }
 .pf2e-ea-launch-panel { display:flex; flex-direction:column; gap:0.7rem; }
 .pf2e-ea-chat-open { margin-top:0.5rem; width:100%; }
-.pf2e-ea-chat-summary table { width:100%; table-layout:auto; }
-.pf2e-ea-chat-summary th, .pf2e-ea-chat-summary td { vertical-align:middle; }
-.pf2e-ea-report-actor { display:flex; gap:0.5rem; align-items:center; }
-.pf2e-ea-report-actor img { display:block; flex:0 0 38px; width:38px; height:38px; object-fit:cover; border-radius:4px; border:0; }
-.pf2e-ea-result { white-space:normal; font-variant-numeric:tabular-nums; }
-@container (max-width: 650px) { .pf2e-ea-columns { grid-template-columns:1fr; } }
+/* Chat reports are compact vertical records, not a table squeezed into chat. */
+.pf2e-ea-chat-summary { min-width:0; font-size:0.85rem; line-height:1.3; }
+.pf2e-ea-chat-summary .pf2e-ea-report-title { font-size:0.98rem; line-height:1.25; margin:0 0 0.4rem; padding:0 0 0.3rem; border-bottom:1px solid var(--color-border-light-primary,#7775); }
+.pf2e-ea-chat-summary .pf2e-ea-report-list { display:flex; flex-direction:column; gap:0; padding:0; margin:0; list-style:none; }
+.pf2e-ea-chat-summary .pf2e-ea-report-row { display:flex; align-items:center; gap:0.5rem; min-width:0; margin:0; padding:0.42rem 0; border-bottom:1px solid var(--color-border-light-primary,#7774); }
+.pf2e-ea-chat-summary .pf2e-ea-report-row:last-child { border-bottom:0; padding-bottom:0.1rem; }
+.pf2e-ea-chat-summary .pf2e-ea-report-avatar { display:block; width:32px; height:32px; flex:0 0 32px; object-fit:cover; border:0; border-radius:4px; }
+.pf2e-ea-chat-summary .pf2e-ea-report-info { display:flex; flex:1 1 auto; flex-direction:column; gap:0.12rem; min-width:0; }
+.pf2e-ea-chat-summary .pf2e-ea-report-name { display:block; font-size:0.88rem; line-height:1.22; font-weight:700; white-space:normal; overflow-wrap:anywhere; }
+.pf2e-ea-chat-summary .pf2e-ea-report-activity { display:block; min-width:0; opacity:0.85; overflow-wrap:break-word; line-height:1.23; }
+.pf2e-ea-chat-summary .pf2e-ea-report-detail { opacity:0.82; }
+.pf2e-ea-chat-summary .pf2e-ea-report-result { display:flex; flex:0 0 auto; max-width:78px; flex-direction:column; align-items:flex-end; gap:0.05rem; min-width:0; text-align:right; font-variant-numeric:tabular-nums; line-height:1.18; }
+.pf2e-ea-chat-summary .pf2e-ea-report-total { font-size:1rem; font-weight:700; }
+.pf2e-ea-chat-summary .pf2e-ea-report-degree { font-size:0.72rem; opacity:0.82; white-space:normal; overflow-wrap:break-word; }
+.pf2e-ea-chat-summary .pf2e-ea-report-error, .pf2e-ea-chat-summary .pf2e-ea-report-muted { font-size:0.73rem; opacity:0.8; white-space:normal; overflow-wrap:break-word; }
+.pf2e-ea-chat-summary .pf2e-ea-report-empty { margin:0; opacity:0.8; }
+@container (max-width: 500px) { .pf2e-ea-columns { grid-template-columns:1fr; } }
 .pf2e-ea-root { container-type:inline-size; }
 
 @media(max-width:480px){.pf2e-ea-footer { grid-template-columns:1fr auto; }.pf2e-ea-footer-center { grid-column:1; justify-self:start; }.pf2e-ea-footer-right { grid-column:2; }}
+
+/* Native PF2e Treat Wounds roll was already applied to the selected patient. */
+.pf2e-ea-auto-heal-note { border-top:1px solid var(--color-border-light-primary,#7776); padding-top:0.35rem; margin-top:0.4rem; font-size:0.82rem; font-weight:600; }
+.pf2e-ea-report-applied { font-size:0.74rem; font-weight:600; color:var(--color-level-success,#328553); }
+.pf2e-ea-report-applied-damage { color:var(--color-level-error,#a33); }

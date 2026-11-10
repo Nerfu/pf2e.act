@@ -12,11 +12,43 @@ export function ownedActor() {
   return actor && members().some(a => a.id === actor.id) && actor.isOwner ? actor : null;
 }
 export function remember(actor) { return actor?.getFlag(ID, "remember") === true; }
-export function choiceFor(actor, s = session()) {
+/**
+ * One ordering key per character's current activity. Changing only an activity's
+ * detail must not change its place in the queue. A new activity enters last.
+ * Remembered choices without an explicit selection are placed first, in Party
+ * order, so a returning group gets a predictable starting order.
+ */
+export function selectionFor(actor, s = session()) {
   if (!actor || !s.id || !s.actorIds?.includes(actor.id)) return null;
   const latest = actor.getFlag(ID, "current");
-  if (latest?.sessionId === s.id) return latest.choice ?? null;
-  return remember(actor) ? actor.getFlag(ID, "last") ?? null : null;
+  const fromCurrent = latest?.sessionId === s.id;
+  const choice = fromCurrent
+    ? latest.choice
+    : (remember(actor) ? actor.getFlag(ID, "last") : null);
+  if (!ACTIVITY_BY_ID.has(choice?.activityId)) return null;
+  const chosenAt = fromCurrent && Number.isFinite(latest.chosenAt) ? latest.chosenAt : 0;
+  return { choice, chosenAt };
+}
+export function choiceFor(actor, s = session()) {
+  return selectionFor(actor, s)?.choice ?? null;
+}
+/** Shared ordering for the on-screen names, chat reports and execution. */
+export function orderedSelections(s = session()) {
+  return members(s).map((actor, partyIndex) => {
+    const selection = selectionFor(actor, s);
+    return selection ? { actor, choice: selection.choice, chosenAt: selection.chosenAt, partyIndex } : null;
+  }).filter(Boolean).sort((a, b) =>
+    a.chosenAt - b.chosenAt || a.partyIndex - b.partyIndex
+  );
+}
+let lastSelectionTime = 0;
+function nextSelectionTime() {
+  // Foundry's server-synchronized clock keeps connected clients in approximately
+  // the same time frame; local monotonicity resolves rapid repeated GM choices.
+  const serverTime = Number(game.time?.serverTime);
+  const now = Number.isFinite(serverTime) && serverTime > 1e12 ? serverTime : Date.now();
+  lastSelectionTime = Math.max(Math.trunc(now), lastSelectionTime + 1);
+  return lastSelectionTime;
 }
 export function userFor(actor) {
   return game.users.find(u => u.character?.id === actor.id) ?? null;
@@ -37,7 +69,6 @@ export function choiceText(choice, actor) {
     case "follow": extra = `${t("Following")} ${game.actors.get(choice.targetId)?.name ?? "?"}`; break;
     case "text": extra = choice.detail; break;
     case "heal": extra = `${game.actors.get(choice.targetId)?.name ?? "?"}, ${t("DC")} ${({trained:15,expert:20,master:30,legendary:40})[choice.rank] ?? "?"}`; break;
-    case "repair": extra = choice.itemName || t("Item"); break;
   }
   return `${t(`Activity.${choice.activityId}`)}${extra ? ` — ${extra}` : ""}`;
 }
@@ -46,28 +77,17 @@ export function detailText(choice, actor) {
   const name = t(`Activity.${choice?.activityId}`);
   return whole.startsWith(`${name} — `) ? whole.slice(name.length + 3) : "";
 }
-export function itemsFor(actor) {
-  // Real PF2e physical item documents, visible to the player (not scene tokens).
-  const sources = [actor, ...members().filter(a => a.id !== actor.id), party()].filter(Boolean);
-  const seen = new Set();
-  const items = [];
-  for (const holder of sources) {
-    if (!holder.visible) continue;
-    for (const item of holder.items ?? []) {
-      if (!item.isOfType?.("physical") || !item.uuid || seen.has(item.uuid) || !item.visible) continue;
-      seen.add(item.uuid);
-      items.push({value:item.uuid, label:`${item.name} (${holder.name})`});
-    }
-  }
-  return items.sort((a,b) => a.label.localeCompare(b.label,game.i18n.lang));
-}
 export async function setChoice(actor, choice) {
   const s = session();
   if (s.phase !== "open" || !s.actorIds?.includes(actor.id)) throw new Error(t("Unavailable"));
   if (!game.user.isGM && (!ownedActor() || ownedActor().id !== actor.id)) throw new Error(t("NoRights"));
-  const items = choice?.activityId === "repair" ? new Set(itemsFor(actor).map(i=>i.value)) : null;
-  if (!validateChoice(choice, actor, s.actorIds, items)) throw new Error(t("InvalidChoice"));
-  await actor.setFlag(ID, "current", {sessionId:s.id,choice});
+  if (!validateChoice(choice, actor, s.actorIds)) throw new Error(t("InvalidChoice"));
+  const previous = selectionFor(actor, s);
+  // Reconfirming the same activity (or editing its skill/target) keeps its place.
+  // Switching activities always puts the character at the end of the new list.
+  const chosenAt = previous?.choice.activityId === choice.activityId
+    ? previous.chosenAt : nextSelectionTime();
+  await actor.setFlag(ID, "current", {sessionId:s.id,choice,chosenAt});
 }
 export async function setRemember(actor, checked) {
   if (!isOpen()) throw new Error(t("Unavailable"));

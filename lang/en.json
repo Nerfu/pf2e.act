@@ -24,8 +24,6 @@
     "Detail": "Details",
     "Patient": "Patient",
     "TreatmentDC": "Treatment DC",
-    "RepairItem": "Item to Repair",
-    "Item": "Item",
     "DC": "DC",
     "Following": "following",
     "GMOnly": "Only the GM can launch activity selection.",
@@ -41,12 +39,10 @@
     "NoSkills": "No matching skills available.",
     "NoOtherMembers": "No other Party member available.",
     "MedicineTrainingRequired": "Trained Medicine proficiency is required for Treat Wounds.",
-    "HealingHint": "The native PF2e apply-healing chat button requires the patient's token to be selected on the scene.",
-    "NoRepairableItems": "No accessible PF2e physical items; add one to a character or Party inventory.",
+    "HealingHint": "PF2e rolls the check and healing dice. Healing (or damage on critical failure) is automatically applied to the selected patient. The GM tracks repeat attempts.",
     "MissingStatistic": "Missing check statistic",
     "MissingAction": "PF2e system action not available",
     "MissingTarget": "Patient not found.",
-    "MissingItem": "Item not found or no longer accessible.",
     "RollErrors": "Some checks could not be performed",
     "SomeRollsFailed": "Some checks failed; a private GM message has details.",
     "UnexpectedError": "Could not perform the action.",
@@ -68,14 +64,18 @@
       "other": "Other Activity",
       "skill": "Use a Skill",
       "track": "Track",
-      "heal": "Treat Wounds",
-      "repair": "Repair"
+      "heal": "Treat Wounds"
     },
     "GMResults": "Results (GM)",
     "Result": "Result",
     "SecretResult": "Secret check",
     "FailedCheck": "Check failed",
     "SeeChat": "See PF2e chat card",
-    "NoRoll": "No roll"
+    "NoRoll": "No roll",
+    "MissingHealingRoll": "Could not find the native PF2e healing or damage roll.",
+    "MissingHealingToken": "Could not prepare a token context for the patient.",
+    "AlreadyApplied": "This result has already been automatically applied.",
+    "AutomaticallyApplied": "Applied automatically",
+    "HPUnit": "HP"
   }
 }

@@ -1,5 +1,5 @@
 import { ID, ACTIVITIES, ACTIVITY_BY_ID, HEAL_RANKS, esc, skillOptions } from "./config.mjs";
-import { t, session, members, ownedActor, choiceFor, remember, actorColor, choiceText, detailText, itemsFor, setChoice, setRemember, chosenCount, fail } from "./state.mjs";
+import { t, session, members, ownedActor, choiceFor, orderedSelections, remember, actorColor, choiceText, detailText, setChoice, setRemember, chosenCount, fail } from "./state.mjs";
 import { launch, finish } from "./controller.mjs";
 
 const ApplicationV2 = foundry.applications.api.ApplicationV2;
@@ -36,12 +36,6 @@ function inputFields(actor, activityId, old = {}) {
         ${options.map(x=>option(x.key,`${t("DC")} ${x.dc} — ${t(`Rank.${x.key}`)}`,x.key===old.rank)).join("")}</select></label>
       <p class="pf2e-ea-hint">${esc(t("HealingHint"))}</p>`;
   }
-  if (detail === "repair") {
-    const items = itemsFor(actor);
-    if (!items.length) return `<p class="pf2e-ea-warning">${esc(t("NoRepairableItems"))}</p>`;
-    return `<label>${esc(t("RepairItem"))}<select name="itemUuid" required>
-      ${items.map(i=>option(i.value,i.label,i.value===old.itemUuid)).join("")}</select></label>`;
-  }
   return "";
 }
 function parseForm(actor, activityId, form) {
@@ -53,11 +47,6 @@ function parseForm(actor, activityId, form) {
     case "follow": choice.targetId = read("targetId"); break;
     case "text": choice.detail = read("detail").trim().slice(0,300); break;
     case "heal": choice.targetId = read("targetId");choice.rank = read("rank");break;
-    case "repair": {
-      choice.itemUuid = read("itemUuid");
-      choice.itemName = itemsFor(actor).find(i=>i.value===choice.itemUuid)?.label ?? "";
-      break;
-    }
   }
   return choice;
 }
@@ -92,7 +81,7 @@ class BaseWindow extends ApplicationV2 {
 }
 
 export class ActivityWindow extends BaseWindow {
-  static DEFAULT_OPTIONS = { position: { width: 920 } };
+  static DEFAULT_OPTIONS = { position: { width: 740 } };
   static current = null;
   editing = null;
   get title() { return t("Title"); }
@@ -106,18 +95,16 @@ export class ActivityWindow extends BaseWindow {
   contentHTML() {
     if(session().phase !== "open") return `<p>${esc(t("Unavailable"))}</p>`;
     const own = ownedActor();
-    // Keep frequently used exploration choices together in the left column.
-    // The remaining choices occupy an equally wide right column, with "Other"
-    // in the final full-width row (13 activities => six on each side + one).
-    const frequent = new Set(["search", "avoid", "scout", "investigate", "defend", "detect"]);
-    const common = ACTIVITIES.filter(activity => frequent.has(activity.id));
-    const additional = ACTIVITIES.filter(activity => !frequent.has(activity.id) && activity.id !== "other");
-    const other = ACTIVITY_BY_ID.get("other");
+    const selections = orderedSelections();
+    // Stable, deliberately ordered two-column layout (6 activities per column).
+    const leftIds = ["search", "avoid", "investigate", "scout", "defend", "track"];
+    const rightIds = ["skill", "detect", "repeat", "heal", "follow", "other"];
+    const left = leftIds.map(id => ACTIVITY_BY_ID.get(id)).filter(Boolean);
+    const right = rightIds.map(id => ACTIVITY_BY_ID.get(id)).filter(Boolean);
     const activityHTML = activity => {
-      const chosen = members().filter(a => choiceFor(a)?.activityId === activity.id);
+      const chosen = selections.filter(({choice}) => choice.activityId === activity.id);
       const selected = !!own && choiceFor(own)?.activityId === activity.id;
-      const names = chosen.map(actor => {
-        const ch = choiceFor(actor);
+      const names = chosen.map(({actor,choice:ch}) => {
         const detail = detailText(ch, actor);
         return `<span class="pf2e-ea-choice">
           <span class="pf2e-ea-character" style="color:${esc(actorColor(actor))}">${esc(actor.name)}</span>${detail ? `<span class="pf2e-ea-detail"> — ${esc(detail)}</span>` : ""}
@@ -133,9 +120,9 @@ export class ActivityWindow extends BaseWindow {
       </section>`;
     };
     const rows = `<div class="pf2e-ea-columns">
-      <div class="pf2e-ea-column">${common.map(activityHTML).join("")}</div>
-      <div class="pf2e-ea-column">${additional.map(activityHTML).join("")}</div>
-    </div>${other ? `<div class="pf2e-ea-other">${activityHTML(other)}</div>` : ""}`;
+      <div class="pf2e-ea-column">${left.map(activityHTML).join("")}</div>
+      <div class="pf2e-ea-column">${right.map(activityHTML).join("")}</div>
+    </div>`;
     const footer = `<footer class="pf2e-ea-footer">
       <div class="pf2e-ea-footer-left">${own?`<label class="pf2e-ea-remember"><input type="checkbox" data-remember="${esc(own.id)}" ${remember(own)?"checked":""} />${esc(t("Remember"))}</label>`:""}</div>
       <div class="pf2e-ea-footer-center">${game.user.isGM?`<button type="button" data-master="1">${esc(t("ChooseForPlayers"))}</button>`:""}</div>

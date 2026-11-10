@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   release:
-    # Release by a tag or by a main-branch commit named release: vX.Y.Z.
+    # Release by an annotated tag or by a main-branch commit named release: vX.Y.Z.
     if: >-
       startsWith(github.ref, 'refs/tags/v') ||
       (github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'release: v'))

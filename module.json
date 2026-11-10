@@ -1,8 +1,8 @@
 {
   "id": "pf2e-exploration-activities",
   "title": "PF2e Exploration Activities",
-  "description": "Group exploration activity requests with PF2e native checks, optional Dice So Nice animations, and Treat Wounds/Repair integration.",
-  "version": "0.1.2",
+  "description": "Group exploration activity requests with PF2e native checks, optional Dice So Nice animations, and automatic Treat Wounds healing.",
+  "version": "0.1.3",
   "authors": [
     {
       "name": "Community"

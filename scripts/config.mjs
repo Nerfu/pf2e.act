@@ -1,18 +1,19 @@
 export const ID = "pf2e-exploration-activities";
 export const ACTIVITIES = Object.freeze([
+  // Left column: travel and investigation.
   { id: "search", icon: "magnifying-glass", secret: true, stat: "perception" },
   { id: "avoid", icon: "eye-slash", secret: true, stat: "stealth" },
   { id: "investigate", icon: "book-open", secret: true, detail: "knowledge" },
   { id: "scout", icon: "binoculars" },
   { id: "defend", icon: "shield" },
+  { id: "track", icon: "shoe-prints", stat: "survival" },
+  // Right column: other activities.
+  { id: "skill", icon: "dice-d20", detail: "skill" },
   { id: "detect", icon: "wand-magic-sparkles" },
   { id: "repeat", icon: "rotate" },
+  { id: "heal", icon: "heart-pulse", detail: "heal" },
   { id: "follow", icon: "users", detail: "follow" },
   { id: "other", icon: "ellipsis", detail: "text" },
-  { id: "skill", icon: "dice-d20", detail: "skill" },
-  { id: "track", icon: "shoe-prints", stat: "survival" },
-  { id: "heal", icon: "heart-pulse", detail: "heal" },
-  { id: "repair", icon: "screwdriver-wrench", detail: "repair" },
 ]);
 export const ACTIVITY_BY_ID = new Map(ACTIVITIES.map(a => [a.id, a]));
 export const KNOWLEDGE_SKILLS = new Set(["arcana", "nature", "occultism", "religion", "society"]);
@@ -32,7 +33,7 @@ export function skillOptions(actor, knowledgeOnly = false) {
     .map(([slug, stat]) => ({ value: slug, label: stat.label || slug }))
     .sort((a, b) => a.label.localeCompare(b.label, game?.i18n?.lang ?? "ru"));
 }
-export function validateChoice(choice, actor, partyIds, availableItemUuids = null) {
+export function validateChoice(choice, actor, partyIds) {
   if (!choice || typeof choice !== "object" || !ACTIVITY_BY_ID.has(choice.activityId)) return false;
   const type = ACTIVITY_BY_ID.get(choice.activityId);
   if (!type.detail) return true;
@@ -45,10 +46,6 @@ export function validateChoice(choice, actor, partyIds, availableItemUuids = nul
     const skill = actor?.skills?.medicine;
     const rank = HEAL_RANKS.find(x => x.key === choice.rank);
     return partyIds.includes(choice.targetId) && !!rank && Number(skill?.rank ?? 0) >= rank.rank;
-  }
-  if (type.detail === "repair") {
-    return typeof choice.itemUuid === "string" && !!choice.itemUuid &&
-      (availableItemUuids === null || availableItemUuids.has(choice.itemUuid));
   }
   return false;
 }

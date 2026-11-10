@@ -1,6 +1,7 @@
 import { ID } from "./config.mjs";
 import { session, fail, t } from "./state.mjs";
 import { launch, finish, chatLauncher } from "./controller.mjs";
+import { renderAppliedTreatment } from "./healing.mjs";
 import { LauncherWindow, ActivityWindow, updateWindows } from "./ui.mjs";
 
 Hooks.once("init", () => {
@@ -16,6 +17,7 @@ Hooks.once("init", () => {
   game.modules.get(ID).api={launch,finish,open:()=>ActivityWindow.open(),getSession:()=>session()};
 });
 Hooks.on("renderChatMessageHTML",chatLauncher);
+Hooks.on("renderChatMessageHTML",renderAppliedTreatment);
 Hooks.on("updateActor",actor=>{if(session().actorIds?.includes(actor.id))updateWindows();});
 Hooks.on("deleteActor",()=>updateWindows());
 Hooks.on("updateUser",()=>updateWindows());

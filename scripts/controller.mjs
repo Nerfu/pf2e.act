@@ -1,5 +1,6 @@
-import { ID, ACTIVITY_BY_ID, HEAL_RANKS, esc, validateChoice } from "./config.mjs";
-import { t, session, party, members, choiceFor, remember, userFor, actorColor, choiceText, fail, itemsFor } from "./state.mjs";
+import { ID, ACTIVITY_BY_ID, esc, validateChoice } from "./config.mjs";
+import { performTreatment } from "./healing.mjs";
+import { t, session, party, members, choiceFor, orderedSelections, remember, userFor, actorColor, choiceText, fail } from "./state.mjs";
 
 let resolving = false;
 const apiAction = slug => game.pf2e?.actions?.get?.(slug);
@@ -44,61 +45,62 @@ async function execute(actor, choice) {
     case "heal": {
       const action = apiAction("treat-wounds");
       if (!action?.use) throw new Error(t("MissingAction")+" (Treat Wounds)");
-      const hasFeat = slug => actor.items.some(item => item.type === "feat" && item.slug === slug);
-      const feats = {
-        "risky-surgery":hasFeat("risky-surgery") && actor.getRollOptions(["medicine"]).includes("risky-surgery"),
-        "mortal-healing":hasFeat("mortal-healing"),
-      };
       const target = game.actors.get(choice.targetId);
       if (!target) throw new Error(t("MissingTarget"));
-      // Use PF2e's own action: it creates both the check and a native healing/damage card.
-      // The card's standard application button targets tokens selected at application time.
-      return actionRoll(await action.use({actors:[actor],target,selection:{skill:"medicine",rank:choice.rank,modifier:0,feats}}));
-    }
-    case "repair": {
-      const item = await fromUuid(choice.itemUuid);
-      if (!item?.isOfType?.("physical")) throw new Error(t("MissingItem"));
-      // The PF2e legacy action intentionally renders a native Repair result card.
-      if (typeof game.pf2e?.actions?.repair !== "function") throw new Error(t("MissingAction")+" (Repair)");
-      // Repair's legacy macro returns before its asynchronous native chat card is posted.
-      // Never invent a result: link the user to that native PF2e card instead.
-      await game.pf2e.actions.repair({actors:[actor],item});
-      return { external: true };
+      return performTreatment(actor, target, choice, action);
     }
     default: return;
   }
 }
 
 function tokenPortrait(actor) {
-  // Prototype token artwork, not the portrait on the actor sheet.
+  // Use the prototype-token image, not the actor-sheet portrait.
   return actor.prototypeToken?.texture?.src || actor.img || "icons/svg/mystery-man.svg";
 }
 
+/** Return only result markup. For public secret checks: no result data whatsoever. */
 function resultHTML(choice, result, gm) {
-  if (ACTIVITY_BY_ID.get(choice.activityId)?.secret && !gm) return esc(t("SecretResult"));
-  if (result?.error) return esc(t("FailedCheck"));
-  if (result?.external) return esc(t("SeeChat"));
+  if (ACTIVITY_BY_ID.get(choice.activityId)?.secret && !gm) return "";
+  if (result?.error) return `<span class="pf2e-ea-report-error">${esc(t("FailedCheck"))}</span>`;
   if (Number.isFinite(result?.total)) {
-    const outcome = ["criticalSuccess", "success", "failure", "criticalFailure"].includes(result?.outcome)
-      ? game.i18n.localize(`PF2E.Check.Result.Degree.Check.${result.outcome}`) : "";
-    const localized = outcome?.startsWith("PF2E.") ? "" : outcome;
-    return `<strong>${esc(result.total)}</strong>${localized ? ` <small>(${esc(localized)})</small>` : ""}`;
+    const key = `PF2E.Check.Result.Degree.Check.${result.outcome}`;
+    const localized = ["criticalSuccess", "success", "failure", "criticalFailure"].includes(result?.outcome)
+      ? game.i18n.localize(key) : "";
+    const degree = localized && localized !== key ? localized : "";
+    const applications = [result?.risky, result?.applied].filter(Boolean);
+    const summary = applications.map(applied =>
+      `<span class="pf2e-ea-report-applied ${applied.damaging ? "pf2e-ea-report-applied-damage" : ""}">`+
+      `${esc(applied.damaging ? "−" : "+")}${esc(applied.amount)} ${esc(t("HPUnit"))}</span>`
+    ).join("");
+    return `<span class="pf2e-ea-report-total">${esc(result.total)}</span>`+
+      (degree ? `<span class="pf2e-ea-report-degree">${esc(degree)}</span>` : "")+ summary;
   }
-  return result?.noRoll ? esc(t("NoRoll")) : esc(t("SeeChat"));
+  // No-roll activities need no separate 'without a roll' label: the activity is shown.
+  if (result?.noRoll) return "";
+  return `<span class="pf2e-ea-report-muted">${esc(t("SeeChat"))}</span>`;
 }
 
-function resultsSummary(snapshots, outcomes, { gm = false } = {}) {
+/** Content-first Foundry chat cards: no tables, so long names remain readable. */
+export function resultsSummary(snapshots, outcomes, { gm = false } = {}) {
   const rows = snapshots.map(({ actor, choice }) => {
-    const character = `<span class="pf2e-ea-report-actor"><img src="${esc(tokenPortrait(actor))}" alt="" />`+
-      `<strong style="color:${esc(actorColor(actor))}">${esc(actor.name)}</strong></span>`;
-    const activity = esc(choiceText(choice, actor));
-    return `<tr><td>${character}</td><td>${activity}</td>`+
-      `<td class="pf2e-ea-result">${resultHTML(choice, outcomes.get(actor.id), gm)}</td></tr>`;
+    const result = resultHTML(choice, outcomes.get(actor.id), gm);
+    const activity = esc(t(`Activity.${choice.activityId}`));
+    const details = choiceText(choice, actor);
+    const prefix = t(`Activity.${choice.activityId}`);
+    const detail = details.startsWith(`${prefix} — `) ? details.slice(prefix.length + 3) : "";
+    return `<li class="pf2e-ea-report-row">`+
+      `<img class="pf2e-ea-report-avatar" src="${esc(tokenPortrait(actor))}" alt="" />`+
+      `<div class="pf2e-ea-report-info">`+
+      `<span class="pf2e-ea-report-name" style="color:${esc(actorColor(actor))}">${esc(actor.name)}</span>`+
+      `<span class="pf2e-ea-report-activity">${activity}${detail ? ` <span class="pf2e-ea-report-detail">— ${esc(detail)}</span>` : ""}</span>`+
+      `</div>`+
+      (result ? `<div class="pf2e-ea-report-result">${result}</div>` : "")+
+      `</li>`;
   }).join("");
-  const title = gm ? t("GMResults") : t("ChatResults");
-  return `<div class="pf2e-ea-chat-summary"><h3>${esc(title)}</h3>`+
-    `<table><thead><tr><th>${esc(t("Character"))}</th><th>${esc(t("ActivityHeader"))}</th><th>${esc(t("Result"))}</th></tr></thead>`+
-    `<tbody>${rows || `<tr><td colspan="3">${esc(t("NoChoice"))}</td></tr>`}</tbody></table></div>`;
+  return `<div class="pf2e-ea-chat-summary">`+
+    `<h3 class="pf2e-ea-report-title">${esc(t(gm ? "GMResults" : "ChatResults"))}</h3>`+
+    (rows ? `<ul class="pf2e-ea-report-list">${rows}</ul>` : `<p class="pf2e-ea-report-empty">${esc(t("NoChoice"))}</p>`)+
+    `</div>`;
 }
 
 export async function launch() {
@@ -131,7 +133,8 @@ export async function finish() {
   if (s.phase !== "open") return ui.notifications.warn(t("Unavailable"));
   // Characters without an activity are allowed: only chosen activities roll.
   // The GM may finish even when nobody has selected anything.
-  const snapshots = members(s).map(actor=>({actor,choice:choiceFor(actor,s)})).filter(x=>!!x.choice);
+  // Use exactly the same chronological ordering as the names under each button.
+  const snapshots = orderedSelections(s);
   const invalid = snapshots.filter(({actor,choice})=>!validateChoice(choice,actor,s.actorIds));
   if (invalid.length) return ui.notifications.warn(`${t("InvalidSelections")}: ${invalid.map(x=>x.actor.name).join(", ")}`);
   resolving = true;
