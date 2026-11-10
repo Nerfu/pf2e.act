@@ -1,53 +1,26 @@
 import { ID, ACTIVITY_BY_ID, esc, validateChoice } from "./config.mjs";
 import { performTreatment } from "./healing.mjs";
+import { rollCheck } from "./rolls.mjs";
 import { t, session, party, members, choiceFor, orderedSelections, remember, userFor, actorColor, choiceText, fail } from "./state.mjs";
 
 let resolving = false;
-const apiAction = slug => game.pf2e?.actions?.get?.(slug);
-const actorStat = (actor, slug) => actor.getStatistic?.(slug) ?? actor.skills?.[slug] ?? (slug === "perception" ? actor.perception : null);
-
-async function check(actor, statSlug, { secret = false, action = "", options = [], traits = [] } = {}) {
-  const statistic = actorStat(actor, statSlug);
-  if (!statistic?.check?.roll) throw new Error(`${actor.name}: ${t("MissingStatistic")} (${statSlug})`);
-  let outcome = null;
-  const roll = await statistic.check.roll({
-    action: action || undefined,
-    extraRollOptions: options,
-    traits,
-    skipDialog: true,
-    messageMode: secret ? "blind" : "public",
-    createMessage: true,
-    callback: (_roll, degree) => { outcome = degree ?? null; },
-  });
-  return { total: Number.isFinite(roll?.total) ? roll.total : null, outcome };
-}
-
-function actionRoll(results) {
-  const entry = Array.isArray(results) ? results[0] : null;
-  return { total: Number.isFinite(entry?.roll?.total) ? entry.roll.total : null, outcome: entry?.outcome ?? null };
-}
-
 async function execute(actor, choice) {
   switch (choice.activityId) {
     case "search":
-      return check(actor,"perception",{secret:true,action:"seek",options:["action:seek"],traits:["concentrate","secret"]});
+      return rollCheck(actor,"perception",{secret:true,action:"seek",options:["action:seek"],traits:["concentrate","secret"]});
     case "avoid":
-      return check(actor,"stealth",{secret:true,action:"avoid-notice",options:["action:avoid-notice"],traits:["exploration","secret"]});
+      return rollCheck(actor,"stealth",{secret:true,action:"avoid-notice",options:["action:avoid-notice"],traits:["exploration","secret"]});
     case "investigate":
-      return check(actor,choice.skill,{secret:true,action:"recall-knowledge",options:["action:recall-knowledge",`action:recall-knowledge:${choice.skill}`],traits:["concentrate","secret"]});
+      return rollCheck(actor,choice.skill,{secret:true,action:"recall-knowledge",options:["action:recall-knowledge",`action:recall-knowledge:${choice.skill}`],traits:["concentrate","secret"]});
     case "skill":
-      return check(actor,choice.skill,{secret:false});
+      return rollCheck(actor,choice.skill,{secret:false});
     case "track": {
-      const track = apiAction("track");
-      if (!track?.use) throw new Error(t("MissingAction")+" (Track)");
-      return actionRoll(await track.use({actors:[actor]}));
+      return rollCheck(actor,"survival",{secret:true,action:"track",options:["action:track"],traits:["concentrate","exploration","move","secret"]});
     }
     case "heal": {
-      const action = apiAction("treat-wounds");
-      if (!action?.use) throw new Error(t("MissingAction")+" (Treat Wounds)");
       const target = game.actors.get(choice.targetId);
       if (!target) throw new Error(t("MissingTarget"));
-      return performTreatment(actor, target, choice, action);
+      return performTreatment(actor, target, choice);
     }
     default: return;
   }
@@ -58,10 +31,24 @@ function tokenPortrait(actor) {
   return actor.prototypeToken?.texture?.src || actor.img || "icons/svg/mystery-man.svg";
 }
 
-/** Return only result markup. For public secret checks: no result data whatsoever. */
+/** Display a formula only to viewers allowed to see the check. */
+function breakdownHTML(result) {
+  const dice = (result.dice ?? []).flatMap(term => term.results.map(die =>
+    `<span class="pf2e-ea-die ${die.kept ? "" : "pf2e-ea-die-dropped"}">d${esc(term.faces)}: ${esc(die.value)}</span>`
+  )).join("");
+  const modifiers = (result.modifiers ?? []).map(mod =>
+    `<span class="pf2e-ea-modifier">${esc(mod.label)} ${mod.value >= 0 ? "+" : ""}${esc(mod.value)}</span>`
+  ).join("");
+  return `<div class="pf2e-ea-roll-breakdown">`+
+    `<div class="pf2e-ea-roll-formula"><strong>${esc(t("Formula"))}:</strong> ${esc(result.formula ?? "")}</div>`+
+    (dice ? `<div class="pf2e-ea-roll-dice">${dice}</div>` : "")+
+    (modifiers ? `<div class="pf2e-ea-roll-modifiers">${modifiers}</div>` : "")+
+    `</div>`;
+}
+
 function resultHTML(choice, result, gm) {
-  if (ACTIVITY_BY_ID.get(choice.activityId)?.secret && !gm) return "";
-  if (result?.error) return `<span class="pf2e-ea-report-error">${esc(t("FailedCheck"))}</span>`;
+  if (ACTIVITY_BY_ID.get(choice.activityId)?.secret && !gm) return { value: "", details: "" };
+  if (result?.error) return { value: `<span class="pf2e-ea-report-error">${esc(t("FailedCheck"))}</span>`, details: "" };
   if (Number.isFinite(result?.total)) {
     const key = `PF2E.Check.Result.Degree.Check.${result.outcome}`;
     const localized = ["criticalSuccess", "success", "failure", "criticalFailure"].includes(result?.outcome)
@@ -72,30 +59,36 @@ function resultHTML(choice, result, gm) {
       `<span class="pf2e-ea-report-applied ${applied.damaging ? "pf2e-ea-report-applied-damage" : ""}">`+
       `${esc(applied.damaging ? "−" : "+")}${esc(applied.amount)} ${esc(t("HPUnit"))}</span>`
     ).join("");
-    return `<span class="pf2e-ea-report-total">${esc(result.total)}</span>`+
-      (degree ? `<span class="pf2e-ea-report-degree">${esc(degree)}</span>` : "")+ summary;
+    const details = breakdownHTML(result) + applications.map(applied =>
+      `<div class="pf2e-ea-applied-breakdown"><strong>${esc(t(applied.damaging ? "Damage" : "Healing"))}</strong>`+
+      breakdownHTML(applied) + `</div>`
+    ).join("");
+    return { value: `<span class="pf2e-ea-report-total">${esc(result.total)}</span>`+
+      (degree ? `<span class="pf2e-ea-report-degree">${esc(degree)}</span>` : "") + summary,
+      details };
   }
-  // No-roll activities need no separate 'without a roll' label: the activity is shown.
-  if (result?.noRoll) return "";
-  return `<span class="pf2e-ea-report-muted">${esc(t("SeeChat"))}</span>`;
+  if (result?.noRoll) return { value: "", details: "" };
+  return { value: `<span class="pf2e-ea-report-muted">${esc(t("FailedCheck"))}</span>`, details: "" };
 }
 
-/** Content-first Foundry chat cards: no tables, so long names remain readable. */
+/** One accessible, collapsible result per character, no independently posted roll cards. */
 export function resultsSummary(snapshots, outcomes, { gm = false } = {}) {
   const rows = snapshots.map(({ actor, choice }) => {
-    const result = resultHTML(choice, outcomes.get(actor.id), gm);
+    const { value, details } = resultHTML(choice, outcomes.get(actor.id), gm);
     const activity = esc(t(`Activity.${choice.activityId}`));
-    const details = choiceText(choice, actor);
+    const desc = choiceText(choice, actor);
     const prefix = t(`Activity.${choice.activityId}`);
-    const detail = details.startsWith(`${prefix} — `) ? details.slice(prefix.length + 3) : "";
-    return `<li class="pf2e-ea-report-row">`+
-      `<img class="pf2e-ea-report-avatar" src="${esc(tokenPortrait(actor))}" alt="" />`+
+    const detail = desc.startsWith(`${prefix} — `) ? desc.slice(prefix.length + 3) : "";
+    const inner = `<img class="pf2e-ea-report-avatar" src="${esc(tokenPortrait(actor))}" alt="" />`+
       `<div class="pf2e-ea-report-info">`+
       `<span class="pf2e-ea-report-name" style="color:${esc(actorColor(actor))}">${esc(actor.name)}</span>`+
       `<span class="pf2e-ea-report-activity">${activity}${detail ? ` <span class="pf2e-ea-report-detail">— ${esc(detail)}</span>` : ""}</span>`+
       `</div>`+
-      (result ? `<div class="pf2e-ea-report-result">${result}</div>` : "")+
-      `</li>`;
+      (value ? `<div class="pf2e-ea-report-result">${value}</div>` : "");
+    if (!details) return `<li class="pf2e-ea-report-row"><div class="pf2e-ea-report-line">${inner}</div></li>`;
+    return `<li class="pf2e-ea-report-row"><details class="pf2e-ea-report-expand">`+
+      `<summary class="pf2e-ea-report-line" title="${esc(t("ExpandResult"))}">${inner}</summary>`+
+      `${details}</details></li>`;
   }).join("");
   return `<div class="pf2e-ea-chat-summary">`+
     `<h3 class="pf2e-ea-report-title">${esc(t(gm ? "GMResults" : "ChatResults"))}</h3>`+
@@ -174,10 +167,7 @@ export async function finish() {
       });
     }
     if(failures.length) {
-      await ChatMessage.create({
-        whisper:gmRecipients,
-        content:`<p><strong>${esc(t("RollErrors"))}</strong></p><ul>${failures.map(f=>`<li>${esc(f)}</li>`).join("")}</ul>`,
-      });
+      console.warn(`${ID} | ${t("RollErrors")}`, failures);
       ui.notifications.warn(t("SomeRollsFailed"));
     }
   } catch(error) { fail(error); }

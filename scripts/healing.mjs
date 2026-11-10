@@ -1,101 +1,43 @@
-import { ID } from "./config.mjs";
 import { t } from "./state.mjs";
+import { rollCheck, animateRoll, describeRoll } from "./rolls.mjs";
 
 /**
- * Apply native PF2e Treat Wounds rolls to the explicitly chosen Party member.
- * We do not prevent repeated treatment or manage time, immunity, or toolkit use.
- * Game rules and decisions about eligibility remain with the GM.
+ * Quiet Treat Wounds for the module's preselected Medicine rank and patient.
+ * Preserve the PF2e check engine, risky surgery / mortal healing adjustments,
+ * native PF2e DamageRoll formulas, and Actor.applyDamage. No chat roll is posted.
+ * The GM remains responsible for time, cooldowns, tools, and eligibility.
  */
+const HEALING_BONUS = { trained: 0, expert: 10, master: 30, legendary: 50 };
+const RANKS = ["untrained", "trained", "expert", "master", "legendary"];
+const DCS = { trained: 15, expert: 20, master: 30, legendary: 40 };
+const OUTCOMES_WITH_HEAL_ROLL = new Set(["success", "criticalSuccess", "criticalFailure"]);
 
-const TREAT_OUTCOMES = new Set(["success", "criticalSuccess", "criticalFailure"]);
-
-function originId(message) {
-  return message?.getFlag?.("pf2e", "origin")?.messageId ?? message?.flags?.pf2e?.origin?.messageId ?? null;
+function hasFeat(actor, slug) {
+  return actor.items?.some(item => item.type === "feat" && item.slug === slug) ?? false;
 }
 
-function isRiskySurgeryRoll(message) {
-  const roll = message.rolls?.[0];
-  const localized = game.i18n.localize("PF2E.Actions.TreatWounds.Rolls.RiskySurgery");
-  return (localized !== "PF2E.Actions.TreatWounds.Rolls.RiskySurgery" &&
-      String(message.flavor ?? "").includes(localized)) ||
-      /\[slashing\]/i.test(String(roll?.formula ?? ""));
+/** Mirrors PF2e's temporary Risky Surgery toggle without persisting actor data. */
+function riskySurgeryRule(actor) {
+  return actor.rules?.find(rule => rule.key === "RollOption" && rule.option === "risky-surgery") ?? null;
 }
 
-/** Observe before executing the native action so fast chat messages cannot be lost. */
-function collectTreatmentMessages() {
-  const observed = new Map();
-  const watchers = new Set();
-  function onCreate(message) {
-    if (originId(message) && message.id) observed.set(message.id, message);
-    for (const watcher of watchers) watcher();
-  }
-  const hookId = Hooks.on("createChatMessage", onCreate);
-  const find = (checkId, kind) => {
-    const all = new Map(game.messages.contents.map(m => [m.id, m]));
-    for (const [id, message] of observed) all.set(id, message);
-    return [...all.values()].find(message =>
-      originId(message) === checkId &&
-      Number.isFinite(message.rolls?.[0]?.total) &&
-      (kind === "risky" ? isRiskySurgeryRoll(message) : !isRiskySurgeryRoll(message))
-    );
-  };
-  return {
-    async waitFor(checkId, kind) {
-      const existing = find(checkId, kind);
-      if (existing) return existing;
-      return new Promise((resolve, reject) => {
-        let timer;
-        const done = () => {
-          const message = find(checkId, kind);
-          if (!message) return;
-          clearTimeout(timer);
-          watchers.delete(done);
-          resolve(message);
-        };
-        watchers.add(done);
-        timer = setTimeout(() => {
-          watchers.delete(done);
-          reject(new Error(t("MissingHealingRoll")));
-        }, 12000);
-        done(); // Close the gap between the initial search and subscription.
-      });
-    },
-    stop() {
-      Hooks.off("createChatMessage", hookId);
-      watchers.clear();
-    },
-  };
+function damageRollClass() {
+  // PF2e registers its DamageRoll class among Foundry's roll types during setup.
+  const cls = CONFIG.Dice.rolls.find(type => type.name === "DamageRoll");
+  if (!cls) throw new Error(t("MissingHealingRoll"));
+  return cls;
 }
 
-async function patientToken(target) {
-  // This is an Actor-based action; never depend on scene token selection.
-  // A temporary linked prototype token provides the context PF2e applyDamage needs.
-  const token = await target.getTokenDocument({ actorLink: true });
-  if (!token) throw new Error(t("MissingHealingToken"));
-  return token;
+async function rollTreatmentDice(formula) {
+  const DamageRoll = damageRollClass();
+  const roll = await new DamageRoll(formula).roll();
+  await animateRoll(roll);
+  return roll;
 }
 
-async function recordAutomaticApplication(message, target, amount, damaging) {
-  try {
-    await message.setFlag(ID, "autoApplied", {
-      targetId: target.id, targetName: target.name, amount, damaging,
-    });
-  } catch (error) {
-    console.warn(`${ID} | Unable to annotate an automatically applied treatment card`, error);
-    // Not an HP error: the application itself succeeded. Don't apply again.
-  }
-}
-
-async function applyNativeRoll(target, token, message, { type, outcome }) {
-  const roll = message.rolls?.[0];
+async function applyTreatmentRoll(target, token, roll, { damaging, outcome }) {
   const amount = roll?.total;
   if (!Number.isFinite(amount) || amount < 0) throw new Error(t("MissingHealingRoll"));
-  if (message.getFlag?.(ID, "autoApplied")) throw new Error(t("AlreadyApplied"));
-
-  const damaging = type !== "healing";
-  // Risky Surgery uses a native slashing DamageRoll, respecting the PF2e damage
-  // system. Critical failure uses its own native DamageRoll. Healing is negative
-  // damage and passes through PF2e's healing-received adjustments and max HP cap.
   await target.applyDamage({
     damage: damaging ? roll : -amount,
     token,
@@ -103,73 +45,80 @@ async function applyNativeRoll(target, token, message, { type, outcome }) {
     rollOptions: new Set(["action:treat-wounds"]),
     outcome,
   });
-  await recordAutomaticApplication(message, target, amount, damaging);
-  return { amount, damaging, targetName: target.name };
+  return { ...describeRoll(roll), amount, damaging };
 }
 
-export async function performTreatment(actor, target, choice, action) {
-  const feats = {
-    "risky-surgery": actor.items.some(item => item.type === "feat" && item.slug === "risky-surgery") &&
-      actor.getRollOptions(["medicine"]).includes("risky-surgery"),
-    "mortal-healing": actor.items.some(item => item.type === "feat" && item.slug === "mortal-healing"),
-  };
-  const collector = collectTreatmentMessages();
+export async function performTreatment(actor, target, choice) {
+  const skill = actor.getStatistic?.("medicine") ?? actor.skills?.medicine;
+  if (!skill?.check?.roll || Number(actor.skills?.medicine?.rank ?? 0) < 1) {
+    throw new Error(`${actor.name}: ${t("MedicineTrainingRequired")}`);
+  }
+  const selectedRank = RANKS.indexOf(choice.rank);
+  const currentRank = Math.min(selectedRank, Number(actor.skills.medicine.rank));
+  const usedRank = RANKS[currentRank];
+  const dc = DCS[usedRank];
+  if (!Number.isFinite(dc)) throw new Error(t("InvalidChoice"));
+
+  const risky = hasFeat(actor, "risky-surgery") &&
+    actor.getRollOptions(["medicine"]).includes("risky-surgery");
+  const mortal = hasFeat(actor, "mortal-healing") && !risky;
+  const rule = riskySurgeryRule(actor);
+  const oldValue = rule?.value;
+  const adjustments = actor.synthetics?.degreeOfSuccessAdjustments?.medicine ?? [];
+  const adjustment = mortal ? {
+    adjustments: { success: { label: "PF2E.Actions.TreatWounds.Feats.MortalHealing", amount: 1 } },
+  } : null;
+  // Use the native PF2e degree adjustment mechanism, not a post-hoc total alteration.
+  if (adjustment) {
+    actor.synthetics.degreeOfSuccessAdjustments.medicine ??= adjustments;
+    adjustments.push(adjustment);
+  }
+  if (rule) rule.value = risky;
+
+  let check;
   try {
-    const results = await action.use({
-      actors: [actor], target,
-      selection: { skill: "medicine", rank: choice.rank, modifier: 0, feats },
+    const options = ["action:treat-wounds", ...actor.getRollOptions(["all", "skill-check", "medicine"])];
+    if (risky && !options.includes("risky-surgery")) options.push("risky-surgery");
+    check = await rollCheck(actor, "medicine", {
+      action: "treat-wounds", options,
+      traits: ["exploration", "healing", "manipulate"],
+      dc: { value: dc, visible: true },
     });
-    const entry = Array.isArray(results) ? results[0] : null;
-    if (!entry?.roll) throw new Error(t("MissingHealingRoll"));
-    const result = {
-      total: Number.isFinite(entry?.roll?.total) ? entry.roll.total : null,
-      outcome: entry?.outcome ?? null,
-    };
-    const hasTreatmentRoll = TREAT_OUTCOMES.has(result.outcome);
-    // Risky Surgery deals its native 1d8 slashing damage even when the Medicine
-    // check merely fails, in which case there is no treatment/healing roll.
-    if (!hasTreatmentRoll && !feats["risky-surgery"]) return result;
-    const checkId = entry?.message?.id;
-    if (!checkId) throw new Error(t("MissingHealingRoll"));
-
-    // Wait for all required dice before mutating any health. PF2e creates the
-    // roll messages asynchronously after its check, sometimes in either order.
-    const [riskyRoll, treatmentRoll] = await Promise.all([
-      feats["risky-surgery"] ? collector.waitFor(checkId, "risky") : null,
-      hasTreatmentRoll ? collector.waitFor(checkId, "treatment") : null,
-    ]);
-    const token = await patientToken(target);
-    if (riskyRoll) result.risky = await applyNativeRoll(target, token, riskyRoll, { type: "risky", outcome: result.outcome });
-    if (treatmentRoll) {
-      const type = result.outcome === "criticalFailure" ? "damage" : "healing";
-      result.applied = await applyNativeRoll(target, token, treatmentRoll, { type, outcome: result.outcome });
-
-      // PF2e Treat Wounds success (including critical success) also removes Wounded.
-      // No immunity, timers, or attempt tracking is added by this module.
-      if (type === "healing" && target.hasCondition?.("wounded")) {
-        await target.toggleCondition("wounded", { active: false });
-      }
-    }
-    return result;
   } finally {
-    collector.stop();
+    if (rule) rule.value = oldValue;
+    if (adjustment) {
+      const i = adjustments.indexOf(adjustment);
+      if (i >= 0) adjustments.splice(i, 1);
+    }
   }
-}
 
-/** Native PF2e roll cards stay visible; disable manual reapplication after success. */
-export function renderAppliedTreatment(message, html) {
-  const applied = message.getFlag?.(ID, "autoApplied");
-  if (!applied) return;
-  const content = html.querySelector?.(".message-content");
-  if (!content) return;
-  for (const button of content.querySelectorAll?.('[data-action="applyDamage"]') ?? []) {
-    button.disabled = true;
-    button.title = t("AlreadyApplied");
+  const result = check;
+  if (!OUTCOMES_WITH_HEAL_ROLL.has(result.outcome) && !risky) return result;
+
+  // The same PF2e formulas as Treat Wounds' native callback, but without messages.
+  const bonus = HEALING_BONUS[usedRank] +
+    (hasFeat(actor, "medic-dedication") ? (currentRank - 1) * 5 : 0) +
+    (hasFeat(actor, "magic-hands") ? Number(actor.system?.details?.level?.value ?? 0) : 0);
+  const healDice = hasFeat(actor, "magic-hands") ? "d10" : "d8";
+  const healFormula = result.outcome === "criticalFailure" ? "{1d8}" :
+    OUTCOMES_WITH_HEAL_ROLL.has(result.outcome)
+      ? `{(${result.outcome === "criticalSuccess" ? 4 : 2}${healDice}${bonus > 0 ? ` + ${bonus}` : ""})[healing]}`
+      : null;
+
+  // Evaluate all required dice first. Once application begins, never re-roll them.
+  const riskyRoll = risky ? await rollTreatmentDice("{1d8[slashing]}") : null;
+  const healingRoll = healFormula ? await rollTreatmentDice(healFormula) : null;
+  const token = await target.getTokenDocument({ actorLink: true });
+  if (!token) throw new Error(t("MissingHealingToken"));
+  if (riskyRoll) result.risky = await applyTreatmentRoll(target, token, riskyRoll, {
+    damaging: true, outcome: result.outcome,
+  });
+  if (healingRoll) {
+    const damaging = result.outcome === "criticalFailure";
+    result.applied = await applyTreatmentRoll(target, token, healingRoll, { damaging, outcome: result.outcome });
+    if (!damaging && target.hasCondition?.("wounded")) {
+      await target.toggleCondition("wounded", { active: false });
+    }
   }
-  if (!content.querySelector?.(".pf2e-ea-auto-heal-note")) {
-    const note = document.createElement("p");
-    note.className = "pf2e-ea-auto-heal-note";
-    note.textContent = `${t("AutomaticallyApplied")}: ${applied.targetName} (${applied.damaging ? "−" : "+"}${applied.amount})`;
-    content.append(note);
-  }
+  return result;
 }

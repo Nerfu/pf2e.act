@@ -44,7 +44,7 @@
     "MissingAction": "PF2e system action not available",
     "MissingTarget": "Patient not found.",
     "RollErrors": "Some checks could not be performed",
-    "SomeRollsFailed": "Some checks failed; a private GM message has details.",
+    "SomeRollsFailed": "Some checks failed; see the GM report and console.",
     "UnexpectedError": "Could not perform the action.",
     "Rank": {
       "trained": "Trained",
@@ -76,6 +76,11 @@
     "MissingHealingToken": "Could not prepare a token context for the patient.",
     "AlreadyApplied": "This result has already been automatically applied.",
     "AutomaticallyApplied": "Applied automatically",
-    "HPUnit": "HP"
+    "HPUnit": "HP",
+    "Formula": "Formula",
+    "ExpandResult": "Expand roll details",
+    "Damage": "Damage",
+    "Healing": "Healing",
+    "MissingRoll": "The system did not return a roll"
   }
 }

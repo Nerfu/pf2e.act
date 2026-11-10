@@ -6,7 +6,7 @@ export const ACTIVITIES = Object.freeze([
   { id: "investigate", icon: "book-open", secret: true, detail: "knowledge" },
   { id: "scout", icon: "binoculars" },
   { id: "defend", icon: "shield" },
-  { id: "track", icon: "shoe-prints", stat: "survival" },
+  { id: "track", icon: "shoe-prints", secret: true, stat: "survival" },
   // Right column: other activities.
   { id: "skill", icon: "dice-d20", detail: "skill" },
   { id: "detect", icon: "wand-magic-sparkles" },

@@ -45,7 +45,14 @@
 .pf2e-ea-chat-summary { min-width:0; font-size:0.85rem; line-height:1.3; }
 .pf2e-ea-chat-summary .pf2e-ea-report-title { font-size:0.98rem; line-height:1.25; margin:0 0 0.4rem; padding:0 0 0.3rem; border-bottom:1px solid var(--color-border-light-primary,#7775); }
 .pf2e-ea-chat-summary .pf2e-ea-report-list { display:flex; flex-direction:column; gap:0; padding:0; margin:0; list-style:none; }
-.pf2e-ea-chat-summary .pf2e-ea-report-row { display:flex; align-items:center; gap:0.5rem; min-width:0; margin:0; padding:0.42rem 0; border-bottom:1px solid var(--color-border-light-primary,#7774); }
+.pf2e-ea-chat-summary .pf2e-ea-report-row { display:block; min-width:0; margin:0; padding:0.42rem 0; border-bottom:1px solid var(--color-border-light-primary,#7774); }
+.pf2e-ea-chat-summary .pf2e-ea-report-line { display:flex; align-items:center; gap:0.5rem; min-width:0; width:100%; }
+.pf2e-ea-chat-summary .pf2e-ea-report-expand { display:block; min-width:0; width:100%; }
+.pf2e-ea-chat-summary .pf2e-ea-report-expand > summary { list-style:none; cursor:pointer; border-radius:3px; }
+.pf2e-ea-chat-summary .pf2e-ea-report-expand > summary::-webkit-details-marker { display:none; }
+.pf2e-ea-chat-summary .pf2e-ea-report-expand > summary::after { content:"▸"; opacity:0.6; font-size:0.7rem; }
+.pf2e-ea-chat-summary .pf2e-ea-report-expand[open] > summary::after { content:"▾"; }
+.pf2e-ea-chat-summary .pf2e-ea-report-expand > summary:hover .pf2e-ea-report-total { text-decoration:underline; text-decoration-style:dotted; }
 .pf2e-ea-chat-summary .pf2e-ea-report-row:last-child { border-bottom:0; padding-bottom:0.1rem; }
 .pf2e-ea-chat-summary .pf2e-ea-report-avatar { display:block; width:32px; height:32px; flex:0 0 32px; object-fit:cover; border:0; border-radius:4px; }
 .pf2e-ea-chat-summary .pf2e-ea-report-info { display:flex; flex:1 1 auto; flex-direction:column; gap:0.12rem; min-width:0; }
@@ -62,7 +69,14 @@
 
 @media(max-width:480px){.pf2e-ea-footer { grid-template-columns:1fr auto; }.pf2e-ea-footer-center { grid-column:1; justify-self:start; }.pf2e-ea-footer-right { grid-column:2; }}
 
-/* Native PF2e Treat Wounds roll was already applied to the selected patient. */
-.pf2e-ea-auto-heal-note { border-top:1px solid var(--color-border-light-primary,#7776); padding-top:0.35rem; margin-top:0.4rem; font-size:0.82rem; font-weight:600; }
 .pf2e-ea-report-applied { font-size:0.74rem; font-weight:600; color:var(--color-level-success,#328553); }
 .pf2e-ea-report-applied-damage { color:var(--color-level-error,#a33); }
+
+/* Each check expands locally without spawning another chat message or rerolling. */
+.pf2e-ea-chat-summary .pf2e-ea-roll-breakdown { margin:0.4rem 0 0.15rem 2.5rem; padding:0.45rem 0.55rem; border-radius:4px; background:var(--color-bg-option,#8882); overflow-wrap:anywhere; }
+.pf2e-ea-chat-summary .pf2e-ea-roll-formula { font-size:0.8rem; font-family:inherit; }
+.pf2e-ea-chat-summary .pf2e-ea-roll-dice, .pf2e-ea-chat-summary .pf2e-ea-roll-modifiers { display:flex; flex-wrap:wrap; gap:0.2rem 0.4rem; margin-top:0.25rem; font-size:0.76rem; }
+.pf2e-ea-chat-summary .pf2e-ea-die, .pf2e-ea-chat-summary .pf2e-ea-modifier { padding:0.08rem 0.3rem; border-radius:3px; background:var(--color-bg-input,#8883); }
+.pf2e-ea-chat-summary .pf2e-ea-die-dropped { text-decoration:line-through; opacity:0.55; }
+.pf2e-ea-chat-summary .pf2e-ea-applied-breakdown { margin-top:0.3rem; padding-left:0.25rem; font-size:0.77rem; }
+.pf2e-ea-chat-summary .pf2e-ea-applied-breakdown > .pf2e-ea-roll-breakdown { margin-top:0.15rem; }
