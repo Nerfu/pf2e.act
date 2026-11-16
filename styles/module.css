@@ -13,11 +13,23 @@
 .pf2e-ea-button-header { display:flex; align-items:center; gap:0.45rem; }
 .pf2e-ea-button-header>.fa-solid { width:16px; flex-shrink:0; text-align:center; }
 .pf2e-ea-button-header .pf2e-ea-button-title { flex:1; font-size:0.91rem; font-weight:600; }
-.pf2e-ea-activity-button:disabled { opacity:0.7; cursor:default; }
+.pf2e-ea-activity-button:disabled { opacity:1; cursor:default; }
+/* Keep activity labels muted for GMs without a character, but not player-name badges. */
+.pf2e-ea-activity-button:disabled .pf2e-ea-button-header { opacity:0.7; }
 .pf2e-ea-activity-button .fa-circle-check { color:#328553; }
 .pf2e-ea-players { display:flex; flex-wrap:wrap; column-gap:0.3rem; row-gap:0.2rem; width:100%; padding-top:0.1rem; font-size:0.82rem; line-height:1.35; }
 .pf2e-ea-players:empty { display:none; }
-.pf2e-ea-choice { display:inline-block; max-width:100%; padding:0.06rem 0.35rem; border-radius:99px; background:rgba(95,130,165,0.15); overflow-wrap:break-word; }
+/* Only the name badges inside the main activity picker receive adaptive surfaces. */
+.pf2e-ea-activity-button .pf2e-ea-choice {
+  display:inline-block; max-width:100%; padding:0.06rem 0.35rem;
+  border-radius:99px; overflow-wrap:break-word;
+  background:var(--pf2e-ea-choice-bg,rgba(95,130,165,0.15));
+  box-shadow:inset 0 0 0 1px var(--pf2e-ea-choice-border,transparent);
+}
+.pf2e-ea-activity-button .pf2e-ea-choice .pf2e-ea-detail {
+  color:var(--pf2e-ea-choice-detail,var(--color-text-primary,inherit));
+  opacity:0.9;
+}
 .pf2e-ea-master-list img { width:25px; height:25px; object-fit:cover; border:0; border-radius:4px; }
 .pf2e-ea-character { font-weight:700; }
 .pf2e-ea-detail { color:var(--color-text-primary,inherit); opacity:0.9; }

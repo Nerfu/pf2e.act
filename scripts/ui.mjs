@@ -1,6 +1,7 @@
 import { ID, ACTIVITIES, ACTIVITY_BY_ID, HEAL_RANKS, esc, skillOptions } from "./config.mjs";
 import { t, session, members, ownedActor, choiceFor, orderedSelections, remember, actorColor, choiceText, detailText, setChoice, setRemember, chosenCount, fail } from "./state.mjs";
 import { launch, finish } from "./controller.mjs";
+import { activityChoicePalette } from "./activity-colors.mjs";
 
 const ApplicationV2 = foundry.applications.api.ApplicationV2;
 function option(value, text, selected = false) {
@@ -106,8 +107,10 @@ export class ActivityWindow extends BaseWindow {
       const selected = !!own && choiceFor(own)?.activityId === activity.id;
       const names = chosen.map(({actor,choice:ch}) => {
         const detail = detailText(ch, actor);
-        return `<span class="pf2e-ea-choice">
-          <span class="pf2e-ea-character" style="color:${esc(actorColor(actor))}">${esc(actor.name)}</span>${detail ? `<span class="pf2e-ea-detail"> — ${esc(detail)}</span>` : ""}
+        const playerColor = actorColor(actor);
+        const palette = activityChoicePalette(playerColor);
+        return `<span class="pf2e-ea-choice" style="--pf2e-ea-choice-bg:${esc(palette.background)};--pf2e-ea-choice-border:${esc(palette.border)};--pf2e-ea-choice-detail:${esc(palette.detailColor)}">
+          <span class="pf2e-ea-character" style="color:${esc(playerColor)}">${esc(actor.name)}</span>${detail ? `<span class="pf2e-ea-detail"> — ${esc(detail)}</span>` : ""}
         </span>`;
       }).join("");
       return `<section class="pf2e-ea-activity ${selected ? "pf2e-ea-selected" : ""}">
